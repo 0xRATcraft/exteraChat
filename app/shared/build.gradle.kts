@@ -68,11 +68,7 @@ kotlin {
     android {
         namespace = "ru.fromchat.shared"
         minSdk = 24
-        compileSdk {
-            version = release(37) {
-                minorApiLevel = 2
-            }
-        }
+        compileSdk = 36
     }
 
     jvmToolchain(17)

@@ -56,16 +56,12 @@ val fixComposeResourcesStructure = tasks.register<FixComposeResTask>("fixCompose
 
 extensions.configure<ApplicationExtension> {
     namespace = "ru.fromchat"
-    compileSdk {
-        version = release(37) {
-            minorApiLevel = 2
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "ru.fromchat"
         minSdk = 24
-        targetSdk = 37
+        targetSdk = 36
         versionCode = rootProject.extra["versionCode"] as Int
         versionName = rootProject.extra["versionName"] as String
 

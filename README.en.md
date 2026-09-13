@@ -1,10 +1,10 @@
 Read in other languages: [Русский](./README.md)
 
-# FromChat
+# exteraChat
 
-FromChat is a 100% free and open-source messenger. This repository is the cross-platform client (Android, Desktop via Compose Multiplatform, and iOS).
+exteraChat is a 100% free and open-source client for FromChat messenger. This repository is the cross-platform client (Android, Desktop via Compose Multiplatform, and iOS).
 
-[📥 Download](https://github.com/fromchat-messenger/android/releases/latest) • [💬 Telegram Channel](https://t.me/fromchat_ch) • [🖥️ Server](https://github.com/fromchat-messenger/backend)
+[📥 Download](https://github.com/0xRATcraft/exteraChat/releases/latest) • [💬 Telegram Channel](https://t.me/exteraChatCh)
 
 ## ✨ Features
 

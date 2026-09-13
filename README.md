@@ -1,10 +1,10 @@
 Читать на других языках: [English](./README.en.md)
 
-# FromChat
+# exteraChat
 
-FromChat — 100% бесплатный и открытый мессенджер. В этом репозитории — кроссплатформенный клиент (Android, Desktop на Compose Multiplatform и iOS).
+exteraChat — 100% бесплатный и открытый клиент на мессенджер FromChat. В этом репозитории — кроссплатформенный клиент (Android, Desktop на Compose Multiplatform и iOS).
 
-[📥 Скачать](https://github.com/fromchat-messenger/android/releases/latest) • [💬 Telegram-канал](https://t.me/fromchat_ch) • [🖥️ Сервер](https://github.com/fromchat-messenger/backend)
+[📥 Скачать](https://github.com/0xRATcraft/exteraChat/releases/latest) • [💬 Telegram-канал](https://t.me/exteraChatCh)
 
 ## ✨ Возможности
 
