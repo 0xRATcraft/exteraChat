@@ -15,7 +15,7 @@ tasks.withType<KotlinCompile> {
 
 extensions.configure<LibraryExtension> {
     namespace = "com.pr0gramm3r101.utils"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 24

@@ -14,7 +14,7 @@ kotlin {
 
     android {
         namespace = "com.pr0gramm3r101.utils"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 24
     }
 
