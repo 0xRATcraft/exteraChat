@@ -4,7 +4,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -36,6 +39,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -51,49 +56,77 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import ru.fromchat.ui.components.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.pr0gramm3r101.utils.conditional
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Res
 import ru.fromchat.api.schema.messages.Message
+import ru.fromchat.chat_drop_attachment_hint
 import ru.fromchat.cd_close
 import ru.fromchat.cd_emoji
 import ru.fromchat.cd_pick_file
 import ru.fromchat.cd_pick_image
 import ru.fromchat.cd_remove
 import ru.fromchat.cd_send
+import ru.fromchat.config.Settings
 import ru.fromchat.message_corrupted_short
 import ru.fromchat.message_editing_title
+import ru.fromchat.ui.main.ConversationDetailContentPadding
+import ru.fromchat.ui.main.LocalConversationListDetailActive
 import ru.fromchat.message_placeholder
 import ru.fromchat.message_replying_to
 import ru.fromchat.suspend_chat_banner_message
 import ru.fromchat.ui.chat.utils.SelectedAttachment
 import ru.fromchat.ui.chat.utils.TypingHandler
+import ru.fromchat.ui.chat.utils.AttachmentDropBridge
+import ru.fromchat.ui.chat.utils.GlobalAttachmentDropRouter
+import ru.fromchat.ui.chat.utils.chatAttachmentDropTarget
 import ru.fromchat.ui.chat.utils.getFilenameFromUri
+import ru.fromchat.ui.chat.utils.isDropHighlightActive
 import ru.fromchat.ui.chat.utils.rememberFilePicker
 import ru.fromchat.ui.chat.utils.rememberImagePicker
+import ru.fromchat.ui.chat.utils.urisToSelectedAttachments
+import kotlin.math.roundToInt
 import kotlin.time.Clock
 
 private val ChatInputChromeHeight = 54.dp
@@ -103,6 +136,23 @@ private val ChatInputTextLineHeight = 22.sp
 private val ChatInputIconSlotSize = 36.dp
 private val ChatInputIconSlotVerticalInset =
     (ChatInputChromeHeight - ChatInputIconSlotSize) / 2f
+
+private fun Modifier.scaleFadeLayout(scale: Float): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val width = (placeable.width * scale).roundToInt().coerceAtLeast(0)
+    val height = (placeable.height * scale).roundToInt().coerceAtLeast(0)
+    layout(width, height) {
+        placeable.placeWithLayer(
+            x = ((width - placeable.width) / 2f).roundToInt(),
+            y = ((height - placeable.height) / 2f).roundToInt(),
+        ) {
+            scaleX = scale
+            scaleY = scale
+            alpha = scale
+            transformOrigin = TransformOrigin.Center
+        }
+    }
+}
 
 @Composable
 private fun <T> AnimatedPreviewBar(
@@ -180,12 +230,29 @@ private fun PreviewBar(
 @Composable
 private fun AttachmentChip(
     attachment: SelectedAttachment,
+    onRemoveStart: () -> Unit,
     onRemove: () -> Unit,
     removeContentDescription: String,
     modifier: Modifier = Modifier,
 ) {
+    val onRemoveState = rememberUpdatedState(onRemove)
+    val onRemoveStartState = rememberUpdatedState(onRemoveStart)
+    val scale = remember { Animatable(0f) }
+    var removing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(removing) {
+        if (removing) {
+            scale.animateTo(0f, tween(durationMillis = 220, easing = FastOutSlowInEasing))
+            onRemoveState.value()
+        } else {
+            scale.animateTo(1f, tween(durationMillis = 220, easing = FastOutSlowInEasing))
+        }
+    }
+
     Row(
-        modifier = modifier
+        modifier = Modifier
+            .scaleFadeLayout(scale.value)
+            .then(modifier)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -217,7 +284,15 @@ private fun AttachmentChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 120.dp),
         )
-        IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+        IconButton(
+            onClick = {
+                if (removing) return@IconButton
+                removing = true
+                onRemoveStartState.value()
+            },
+            enabled = !removing,
+            modifier = Modifier.size(24.dp),
+        ) {
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = removeContentDescription,
@@ -244,11 +319,36 @@ fun ChatInput(
     isReadOnly: Boolean = false,
     onReadOnlyMessageClick: () -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
+    hazeBlurEnabled: Boolean = true,
+    attachmentDropBridge: AttachmentDropBridge,
+    pendingDropUris: List<String> = emptyList(),
 ) {
-    val composerHazeStyle = rememberChatSurfaceContainerHazeStyle()
+    val composerHazeStyle = rememberChatSurfaceContainerHazeStyle().then { blurEnabled(hazeBlurEnabled) }
+    val dropScrimColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, 0.62f)
+    val attachmentDropEnabled = supportsAttachments && !isReadOnly
+    val dropHighlightActive =
+        attachmentDropEnabled && attachmentDropBridge.isDropHighlightActive()
+    val dropAnimMs = 220
+    val dropScale by animateFloatAsState(
+        targetValue = if (dropHighlightActive) 0.96f else 1f,
+        animationSpec = tween(durationMillis = dropAnimMs, easing = FastOutSlowInEasing),
+        label = "chat_input_drop_scale",
+    )
+    val dropOverlayAlpha by animateFloatAsState(
+        targetValue = if (dropHighlightActive) 1f else 0f,
+        animationSpec = tween(durationMillis = dropAnimMs, easing = FastOutSlowInEasing),
+        label = "chat_input_drop_overlay_alpha",
+    )
+    val dropBlurRadius by animateDpAsState(
+        targetValue = if (dropHighlightActive) 18.dp else 0.dp,
+        animationSpec = tween(durationMillis = dropAnimMs, easing = FastOutSlowInEasing),
+        label = "chat_input_drop_blur",
+    )
     val scope = rememberCoroutineScope()
     var typingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var attachments by remember { mutableStateOf<List<SelectedAttachment>>(emptyList()) }
+    var exitingAttachmentIds by remember { mutableStateOf(setOf<String>()) }
+    var pendingDropSeeded by remember { mutableStateOf(false) }
 
     val launchImagePicker = rememberImagePicker { uris ->
         attachments = attachments + uris.map { uri ->
@@ -273,6 +373,27 @@ fun ChatInput(
         }
     }
 
+    DisposableEffect(attachmentDropBridge, attachmentDropEnabled) {
+        fun acceptUris(uris: List<String>) {
+            if (!attachmentDropEnabled || uris.isEmpty()) return
+            attachments = attachments + urisToSelectedAttachments(uris, attachments.size)
+        }
+        attachmentDropBridge.consumer = ::acceptUris
+        GlobalAttachmentDropRouter.setConsumer(::acceptUris)
+        onDispose {
+            attachmentDropBridge.consumer = null
+            GlobalAttachmentDropRouter.setConsumer(null)
+        }
+    }
+
+    LaunchedEffect(pendingDropUris, attachmentDropEnabled) {
+        if (pendingDropSeeded || pendingDropUris.isEmpty() || !attachmentDropEnabled) {
+            return@LaunchedEffect
+        }
+        pendingDropSeeded = true
+        attachments = attachments + urisToSelectedAttachments(pendingDropUris, attachments.size)
+    }
+
     LaunchedEffect(text) {
         if (text.isNotBlank()) {
             typingJob?.cancel()
@@ -287,7 +408,10 @@ fun ChatInput(
         }
     }
 
-    val canSend = !isReadOnly && (text.isNotBlank() || attachments.isNotEmpty())
+    val canSend = !isReadOnly && (
+        text.isNotBlank() || attachments.any { it.id !in exitingAttachmentIds }
+    )
+    val enterToSend = Settings.enterToSend
     val cdClose = stringResource(Res.string.cd_close)
     val cdRemove = stringResource(Res.string.cd_remove)
     val cdPickImage = stringResource(Res.string.cd_pick_image)
@@ -297,14 +421,27 @@ fun ChatInput(
     val corruptedShort = stringResource(Res.string.message_corrupted_short)
     val editingTitle = stringResource(Res.string.message_editing_title)
     val blockedMessage = stringResource(Res.string.suspend_chat_banner_message)
+    val dropAttachmentHint = stringResource(Res.string.chat_drop_attachment_hint)
     val cdVoiceUnavailable = "Функция пока не готова. Следите за обновлениями!"
 
+    fun sendMessage() {
+        if (!canSend) return
+        val plaintext = text.trim().ifBlank { "" }
+        onSend(plaintext, attachments.filter { it.id !in exitingAttachmentIds })
+        onTextChange("")
+        attachments = emptyList()
+        exitingAttachmentIds = emptySet()
+        typingHandler.stopTyping()
+    }
+
+    val chromeHorizontalPad =
+        if (LocalConversationListDetailActive.current) ConversationDetailContentPadding else 8.dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.Transparent)
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+            .padding(start = chromeHorizontalPad, end = chromeHorizontalPad, bottom = 12.dp),
     ) {
         val pillShape = RoundedCornerShape(28.dp)
 
@@ -313,7 +450,7 @@ fun ChatInput(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(pillShape)
-                    .hazeEffect(state = hazeState, style = composerHazeStyle)
+                    .hazeBlur(input = HazeInput.Backdrop(hazeState), style = composerHazeStyle)
                     .clickable(enabled = true) { onReadOnlyMessageClick() },
             ) {
                 Text(
@@ -328,7 +465,12 @@ fun ChatInput(
             }
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .chatAttachmentDropTarget(
+                        enabled = attachmentDropEnabled,
+                        bridge = attachmentDropBridge,
+                    ),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -339,13 +481,24 @@ fun ChatInput(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceContainer, pillShape)
-                            .clip(pillShape)
-                            .hazeEffect(state = hazeState, style = composerHazeStyle),
+                            .graphicsLayer {
+                                scaleX = dropScale
+                                scaleY = dropScale
+                            }
+                            .clip(pillShape),
                     ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceContainer, pillShape)
+                                .hazeBlur(input = HazeInput.Backdrop(hazeState), style = composerHazeStyle)
+                                .conditional(dropBlurRadius > 0.dp) {
+                                    blur(dropBlurRadius, BlurredEdgeTreatment.Unbounded)
+                                },
+                        ) {
                         AnimatedPreviewBar(replyTo) { reply ->
                             val replySubtitle = if (reply.isContentCorrupted) {
                                 corruptedShort
@@ -377,24 +530,33 @@ fun ChatInput(
                             )
                         }
 
-                        AnimatedVisibility(
-                            visible = attachments.isNotEmpty(),
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically(),
-                        ) {
+                        if (attachments.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    .padding(start = 10.dp, end = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 attachments.forEach { attachment ->
-                                    AttachmentChip(
-                                        attachment = attachment,
-                                        onRemove = { attachments = attachments.filter { it.id != attachment.id } },
-                                        removeContentDescription = cdRemove,
-                                    )
+                                    key(attachment.id) {
+                                        AttachmentChip(
+                                            attachment = attachment,
+                                            onRemoveStart = {
+                                                exitingAttachmentIds = exitingAttachmentIds + attachment.id
+                                            },
+                                            onRemove = {
+                                                attachments = attachments.filter { it.id != attachment.id }
+                                                exitingAttachmentIds = exitingAttachmentIds - attachment.id
+                                            },
+                                            removeContentDescription = cdRemove,
+                                            modifier = Modifier.padding(
+                                                end = 8.dp,
+                                                top = 4.dp,
+                                                bottom = 4.dp,
+                                            ),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -435,10 +597,27 @@ fun ChatInput(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
-                                    .align(Alignment.Bottom),
+                                    .align(Alignment.Bottom)
+                                    .conditional(enterToSend) {
+                                        onPreviewKeyEvent { event ->
+                                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                            if (event.key != Key.Enter && event.key != Key.NumPadEnter) {
+                                                return@onPreviewKeyEvent false
+                                            }
+                                            if (event.isShiftPressed) return@onPreviewKeyEvent false
+                                            sendMessage()
+                                            true
+                                        }
+                                    },
                                 textStyle = inputTextStyle,
                                 singleLine = false,
                                 maxLines = 5,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = if (enterToSend) ImeAction.Send else ImeAction.Default,
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onSend = { sendMessage() },
+                                ),
                                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                 decorationBox = { innerTextField ->
                                     Box(
@@ -508,6 +687,24 @@ fun ChatInput(
                                 }
                             }
                         }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .graphicsLayer { alpha = dropOverlayAlpha }
+                                .clip(pillShape)
+                                .background(dropScrimColor.copy(alpha = 0.78f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = dropAttachmentHint,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
+                        }
                     }
                 }
 
@@ -533,11 +730,7 @@ fun ChatInput(
                         .clip(CircleShape)
                         .clickable {
                             if (canSend) {
-                                val plaintext = text.trim().ifBlank { "" }
-                                onSend(plaintext, attachments)
-                                onTextChange("")
-                                attachments = emptyList()
-                                typingHandler.stopTyping()
+                                sendMessage()
                             } else {
                                 scope.launch {
                                     snackbarHostState?.showSnackbar(message = cdVoiceUnavailable)
@@ -550,11 +743,12 @@ fun ChatInput(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(actionBackground)
-                            .hazeEffect(state = hazeState, style = composerHazeStyle) {
+                            .hazeBlur(
+                                input = HazeInput.Backdrop(hazeState),
                                 // Keep the node in the tree in both directions; fading alpha avoids the
                                 // frosted layer popping on over the color when send -> voice.
-                                alpha = hazeOverlayAlpha
-                            },
+                                style = composerHazeStyle.then { alpha(hazeOverlayAlpha) },
+                            ),
                     )
                     AnimatedContent(
                         targetState = canSend,

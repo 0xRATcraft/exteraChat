@@ -41,3 +41,13 @@ actual fun areAppNotificationsEnabled(): Boolean {
         true
     }
 }
+
+actual fun arePushNotificationsSupported(): Boolean = true
+
+actual fun areDesktopMessageNotificationsSupported(): Boolean = false
+
+actual fun areDesktopMessageNotificationsEnabled(): Boolean = false
+
+actual fun setDesktopMessageNotificationsEnabled(enabled: Boolean) = Unit
+
+actual fun requestDesktopNotificationPermission(): Boolean = true

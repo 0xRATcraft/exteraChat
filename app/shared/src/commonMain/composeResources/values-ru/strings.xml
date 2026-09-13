@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FromChat</string>
+    <string name="app_name_beta">FromChat Beta</string>
     <string name="back">Назад</string>
     <string name="settings">Настройки</string>
     <string name="home">Главная</string>
@@ -18,6 +19,26 @@
     <string name="auth_legal_notice_prefix">Регистрируясь, вы соглашаетесь с </string>
     <string name="auth_legal_notice_and"> и </string>
     <string name="app_desc">100% бесплатный и открытый мессенджер. Поддерживает self-hosted установку на своём сервере.</string>
+    <string name="desktop_menu_file">Файл</string>
+    <string name="desktop_menu_edit">Правка</string>
+    <string name="desktop_menu_window">Окно</string>
+    <string name="desktop_about_app">О FromChat</string>
+    <string name="desktop_tray_show">Показать</string>
+    <string name="desktop_show_app">Показать FromChat</string>
+    <string name="desktop_quit">Выйти</string>
+    <string name="desktop_new_chat">Новый чат</string>
+    <string name="desktop_search_conversations">Поиск чатов</string>
+    <string name="desktop_cut">Вырезать</string>
+    <string name="desktop_paste">Вставить</string>
+    <string name="desktop_select_all">Выделить всё</string>
+    <string name="desktop_minimize">Свернуть</string>
+    <string name="desktop_zoom">Масштабировать</string>
+    <string name="desktop_database_locked_title">База данных заблокирована</string>
+    <string name="desktop_database_locked_message">FromChat не может получить доступ к базе данных — её использует другой процесс.</string>
+    <string name="desktop_database_locked_kill">Завершить процесс</string>
+    <string name="desktop_database_locked_waiting">Ожидание освобождения базы данных…</string>
+    <string name="desktop_database_locked_unknown_process">Неизвестный процесс</string>
+    <string name="desktop_database_locked_pid">PID %1$d</string>
     <string name="welcome">Добро пожаловать!</string>
     <string name="login">Войти</string>
     <string name="login_d">Войдите в свой аккаунт</string>
@@ -59,9 +80,13 @@
     <string name="auth_captcha_body">Подтвердите, что вы человек, чтобы продолжить создание аккаунта.</string>
     <string name="auth_captcha_failed">Не удалось пройти проверку. Попробуйте ещё раз.</string>
     <string name="auth_yandex_webview_title">Яндекс ID</string>
+    <string name="auth_yandex_browser_body">Завершите вход в браузере</string>
     <string name="auth_yandex_client_mismatch">Сервер вернул неожиданный идентификатор приложения Яндекса. Обновите приложение или обратитесь в поддержку.</string>
     <string name="auth_yandex_failed">Вход через Яндекс ID отменён или не удался.</string>
     <string name="chats">Чаты</string>
+    <string name="select_chat_placeholder">Выберите чат, чтобы начать переписку</string>
+    <string name="select_contact_placeholder">Выберите контакт</string>
+    <string name="select_settings_placeholder">Выберите раздел настроек</string>
     <string name="contacts">Контакты</string>
     <string name="profile">Профиль</string>
     <string name="dms">Личные чаты</string>
@@ -91,7 +116,10 @@
     <string name="search_not_found">Ничего не найдено</string>
     <string name="search_not_found_message">Ничего не найдено. Попробуйте переформулировать запрос.</string>
     <string name="message_placeholder">Напишите сообщение…</string>
+    <string name="chat_drop_attachment_hint">Отпустите файл здесь</string>
     <string name="status_connecting">Соединение</string>
+    <string name="status_connected">Подключено</string>
+    <string name="status_disconnected">Отключено</string>
     <string name="status_updating">Обновление</string>
     <string name="chat_group_label">Группа</string>
     <string name="chat_members_count">%1$d человек</string>
@@ -297,6 +325,8 @@
     <string name="logout">Выйти</string>
     <string name="materialYou">Material You</string>
     <string name="materialYou_d">Цвета как на обоях. Работает с Android 12 и новее.</string>
+    <string name="enter_to_send">Отправка по Enter</string>
+    <string name="enter_to_send_d">Enter отправляет сообщение. Shift+Enter — новая строка.</string>
     <string name="theme">Оформление</string>
     <string name="as_system">Как на телефоне</string>
     <string name="light">Светлое</string>
@@ -324,6 +354,16 @@
     <string name="settings_notifications_permission_required">Откройте системные настройки и разрешите уведомления.</string>
     <string name="settings_push_notifications">Push-уведомления</string>
     <string name="settings_push_notifications_d">Они помогут вам узнать, если появилось новое сообщение пока приложение закрыто.</string>
+    <string name="settings_push_notifications_unavailable">Недоступны на этой платформе. Новые сообщения видны только пока приложение открыто.</string>
+    <string name="settings_desktop_notifications">Уведомления о сообщениях</string>
+    <string name="settings_desktop_notifications_d">Показывать оповещения в системном трее, когда окно скрыто или вы в другом чате.</string>
+
+    <string name="notification_direct_message">Личное сообщение</string>
+    <string name="notification_direct_message_from">Личное сообщение от %1$s</string>
+    <string name="notification_new_messages">%1$d новых сообщений</string>
+    <string name="notification_new_messages_in">%1$s: %2$s</string>
+    <string name="notification_reply">Ответить</string>
+    <string name="notification_reply_hint">Ответ в чат…</string>
 
     <string name="settings_devices_title">Устройства</string>
     <string name="settings_devices_empty">Нет активных сессий</string>
@@ -371,6 +411,7 @@
     <string name="settings_security_step_confirm_body">Введите новый пароль ещё раз, чтобы убедиться, что без ошибок.</string>
     <string name="settings_next">Далее</string>
     <string name="settings_hub_about_sub">Версия, ссылки и другое</string>
+    <string name="settings_hub_profile_sub">Ваш профиль и публичная информация</string>
     <string name="logs_title">Журнал</string>
     <string name="settings_hub_logs_sub">Просмотр, отправка и очистка журнала</string>
     <string name="logs_empty">Записей пока нет</string>

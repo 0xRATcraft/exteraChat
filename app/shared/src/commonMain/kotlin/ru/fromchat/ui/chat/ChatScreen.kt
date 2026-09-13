@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -69,6 +71,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.LocalDate
@@ -78,15 +81,16 @@ import ru.fromchat.chat_date_yesterday
 import ru.fromchat.utils.rememberRegistrationDateFormatStrings
 import com.pr0gramm3r101.utils.resetFocus
 import com.pr0gramm3r101.utils.supportClipboardManagerImpl
-import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeProgressive
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -98,6 +102,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Logger
+import ru.fromchat.AppForeground
+import ru.fromchat.supportsMouseMessageInteraction
+import ru.fromchat.ui.main.ConversationDetailContentPadding
+import ru.fromchat.ui.main.LocalConversationListDetailActive
+import ru.fromchat.ui.main.detailPaneShowBackButton
 import ru.fromchat.Res
 import ru.fromchat.presence_recently
 import ru.fromchat.api.ApiClient
@@ -143,12 +152,17 @@ import ru.fromchat.status_connecting
 import ru.fromchat.status_updating
 import ru.fromchat.ui.LocalNavController
 import ru.fromchat.ui.chat.utils.AttachmentDownloadVisibility
+import ru.fromchat.ui.chat.utils.PendingChatAttachmentDrops
+import ru.fromchat.ui.chat.utils.chatAttachmentDropTarget
 import ru.fromchat.ui.chat.utils.getImageAspectRatio
 import ru.fromchat.ui.chat.utils.getImageDimensions
 import ru.fromchat.ui.chat.utils.imageAttachmentKey
+import ru.fromchat.ui.chat.utils.rememberAttachmentDropBridge
 import ru.fromchat.ui.chat.utils.visibleMessageIdsInChatList
+import ru.fromchat.ui.chat.utils.unobstructedVisibleMessageIdsInChatList
 import ru.fromchat.ui.components.Text
 import ru.fromchat.ui.components.SuspendedAccountSupportSheet
+import ru.fromchat.ui.extraStatusBars
 import ru.fromchat.utils.NetworkConnectivity
 import ru.fromchat.utils.formatLastSeen
 import ru.fromchat.utils.haptic.HapticFeedbackEvent
@@ -157,7 +171,7 @@ import ru.fromchat.utils.rememberLastSeenFormatStrings
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     panel: ChatPanel,
@@ -426,9 +440,11 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val profileUserId = panelState.profileUserId
-    val hazeState = rememberHazeState(
-        blurEnabled = !(panelState.isLoading && panelState.messages.isEmpty())
-    )
+    val hazeState = rememberHazeState()
+    val hazeBlurEnabled = !(panelState.isLoading && panelState.messages.isEmpty())
+    val listDetailActive = LocalConversationListDetailActive.current
+    val detailContentPad =
+        if (listDetailActive) ConversationDetailContentPadding else 0.dp
 
     val currentTypingUsers = panelState.typingUsers // Directly use from panelState
     val statusMap by UserStatusStore.status.collectAsState()
@@ -436,6 +452,13 @@ fun ChatScreen(
     val online by NetworkConnectivity.isOnline.collectAsState(initial = true)
     val suspensionState by ApiClient.suspensionState.collectAsState()
     val isReadOnly = suspensionState.isSuspended
+    val attachmentDropBridge = rememberAttachmentDropBridge()
+    val attachmentDropEnabled = panel.supportsAttachments && !isReadOnly
+    val attachmentDropChatKey = panel.getRecipientId()?.let { PendingChatAttachmentDrops.dmKey(it) }
+        ?: PendingChatAttachmentDrops.publicKey()
+    val pendingDropUris = remember(attachmentDropChatKey) {
+        PendingChatAttachmentDrops.consume(attachmentDropChatKey)
+    }
     val dmRecipientId = panel.getRecipientId()
     var peerDeleted by remember(dmRecipientId) { mutableStateOf(false) }
     val deleteChatLabel = stringResource(Res.string.action_delete_chat)
@@ -563,9 +586,42 @@ fun ChatScreen(
         }
     }
 
+    val appWindowFocused by AppForeground.isWindowFocused.collectAsState()
+    val windowFocused = LocalWindowInfo.current.isWindowFocused && appWindowFocused
+    LaunchedEffect(listState, panel, windowFocused, currentUserId) {
+        if (!windowFocused) return@LaunchedEffect
+        var pending: Job? = null
+        snapshotFlow {
+            val (topClearancePx, bottomClearancePx) = chatScrollClearancePx.value
+            unobstructedVisibleMessageIdsInChatList(
+                listState = listState,
+                messages = panelState.messages,
+                topClearancePx = topClearancePx,
+                bottomClearancePx = bottomClearancePx,
+            )
+        }
+            .distinctUntilChanged()
+            .collect { ids ->
+                pending?.cancel()
+                if (ids.isEmpty()) return@collect
+                pending = launch {
+                    delay(150)
+                    withContext(Dispatchers.Default) {
+                        MessageRepository.markVisibleMessagesRead(
+                            peerUserId = panel.getRecipientId(),
+                            visibleMessageIds = ids,
+                            currentUserId = currentUserId,
+                            messages = panel.getState().messages,
+                        )
+                    }
+                }
+            }
+    }
+
     // Collect WebSocket messages
     LaunchedEffect(Unit) {
         WebSocketManager.messages.collect { message ->
+            try {
             Logger.d("ChatScreen", "Received WebSocket message: type=${message.type}, data=${message.data != null}")
             when (message.type) {
                 "updates" -> {
@@ -603,15 +659,14 @@ fun ChatScreen(
                                     Logger.d("ChatScreen", "handleWebSocketMessage for ${update.type}")
                                     try {
                                         panel.handleWebSocketMessage(wsMessage)
-                                    } catch (e: Exception) {
+                                    } catch (e: Throwable) {
                                         Logger.e("ChatScreen", "Error handling WebSocket message: ${e.message}", e)
                                     }
                                 }
                             }
                         }
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         Logger.e("ChatScreen", "Error parsing updates message: ${e.message}", e)
-                        e.printStackTrace()
                     }
                 }
                 "statusUpdate" -> message.data?.jsonObject?.let { data ->
@@ -624,12 +679,14 @@ fun ChatScreen(
                 "dmTyping", "stopDmTyping", "typing", "stopTyping", "reactionUpdate",
                 "registeredUserCount" -> {
                     scope.launch {
-                        panel.handleWebSocketMessage(message)
+                        runCatching { panel.handleWebSocketMessage(message) }
+                            .onFailure { Logger.e("ChatScreen", "Error handling WebSocket message: ${it.message}", it) }
                     }
                 }
                 "sendMessage" -> {
                     scope.launch {
-                        panel.handleWebSocketMessage(message)
+                        runCatching { panel.handleWebSocketMessage(message) }
+                            .onFailure { Logger.e("ChatScreen", "Error handling sendMessage: ${it.message}", it) }
                     }
                 }
                 "call_signaling" -> {
@@ -641,6 +698,9 @@ fun ChatScreen(
                 else -> {
                     Logger.w("ChatScreen", "Unhandled top-level WebSocket message type: ${message.type}")
                 }
+            }
+            } catch (e: Throwable) {
+                Logger.e("ChatScreen", "WebSocket collect failed type=${message.type}", e)
             }
         }
     }
@@ -821,17 +881,24 @@ fun ChatScreen(
                         .windowInsetsPadding(WindowInsets.ime)
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .hazeEffect(state = hazeState, style = HazeMaterials.thin()) {
-                            progressive = HazeProgressive.verticalGradient(
-                                startIntensity = 0f,
-                                endIntensity = 1f,
-                            )
-                        }
+                        .hazeBlur(
+                            input = HazeInput.Backdrop(hazeState),
+                            style = HazeMaterials.thin().then {
+                                blurEnabled(hazeBlurEnabled)
+                                progressive(
+                                    HazeProgressive.verticalGradient(
+                                        startIntensity = 0f,
+                                        endIntensity = 1f,
+                                    ),
+                                )
+                            },
+                        )
                 ) {
                     if (peerDeleted && dmRecipientId != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(horizontal = detailContentPad)
                                 .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                         ) {
                             Button(
@@ -862,6 +929,8 @@ fun ChatScreen(
                         text = inputText,
                         onTextChange = { inputText = it },
                         currentUserId = currentUserId,
+                        attachmentDropBridge = attachmentDropBridge,
+                        pendingDropUris = pendingDropUris,
                         onSend = { text, attachments ->
                             if (editingMessage != null) {
                                 scope.launch {
@@ -1045,6 +1114,7 @@ fun ChatScreen(
                         hazeState = hazeState,
                         supportsAttachments = panel.supportsAttachments,
                         isReadOnly = isReadOnly,
+                        hazeBlurEnabled = hazeBlurEnabled,
                         onReadOnlyMessageClick = {
                             if (isReadOnly) {
                                 showSuspendedSupportSheet = true
@@ -1055,10 +1125,14 @@ fun ChatScreen(
                 }
             }
         ) { innerPadding ->
-            val density = LocalDensity.current
-            val statusBarTopDp = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
-            val floatingHeaderClearance =
+            val statusBarTopDp = with(density) {
+                WindowInsets.extraStatusBars.getTop(this).toDp()
+            }
+            val floatingHeaderClearance = if (listDetailActive) {
+                statusBarTopDp + 8.dp + 48.dp + 8.dp
+            } else {
                 statusBarTopDp + 64.dp + 12.dp + ChatFloatingHeaderBottomArcRadius
+            }
             SideEffect {
                 chatScrollClearancePx.value = with(density) {
                     floatingHeaderClearance.roundToPx() to innerPadding.calculateBottomPadding().roundToPx()
@@ -1068,13 +1142,22 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            if (contextMenuState.isOpen) {
-                                contextMenuState = contextMenuState.copy(isOpen = false)
+                    .chatAttachmentDropTarget(
+                        enabled = attachmentDropEnabled,
+                        bridge = attachmentDropBridge,
+                    )
+                    .then(
+                        if (contextMenuState.isOpen && !supportsMouseMessageInteraction()) {
+                            Modifier.pointerInput(Unit) {
+                                detectTapGestures {
+                                    contextMenuState =
+                                        contextMenuState.copy(isOpen = false)
+                                }
                             }
-                        }
-                    }
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 if (panelState.isLoading && panelState.messages.isEmpty()) {
                     Box(
@@ -1094,6 +1177,7 @@ fun ChatScreen(
                                 }
                                 .background(MaterialTheme.colorScheme.background)
                                 .hazeSource(hazeState),
+                            contentPadding = PaddingValues(horizontal = detailContentPad),
                             userScrollEnabled = !contextMenuState.isOpen,
                             reverseLayout = true,
                         ) {
@@ -1127,7 +1211,7 @@ fun ChatScreen(
                                 }
                                 is ChatListItem.MessageRow -> {
                                     val message = item.message
-                                    var tapPositionInRoot by remember {
+                                    var tapPositionInWindow by remember {
                                         mutableStateOf(IntOffset(0, 0))
                                     }
                                     val messageKey = timestampGroupKey(message)
@@ -1265,11 +1349,11 @@ fun ChatScreen(
                                             contextMenuState = ContextMenuState(
                                                 isOpen = true,
                                                 message = message,
-                                                position = tapPositionInRoot
+                                                position = tapPositionInWindow,
                                             )
                                         },
                                         onTapPosition = { offset ->
-                                            tapPositionInRoot =
+                                            tapPositionInWindow =
                                                 IntOffset(offset.x.toInt(), offset.y.toInt())
                                         },
                                         onUsernameClick =
@@ -1359,7 +1443,7 @@ fun ChatScreen(
                                 .align(Alignment.BottomEnd)
                                 .zIndex(2f)
                                 .padding(
-                                    end = 13.dp,
+                                    end = 13.dp + detailContentPad,
                                     bottom = innerPadding.calculateBottomPadding() + 12.dp,
                                 ),
                         ) {
@@ -1383,11 +1467,15 @@ fun ChatScreen(
                                 },
                                 contentDescription = scrollToBottomCd,
                                 hazeState = hazeState,
+                                hazeBlurEnabled = hazeBlurEnabled,
                             )
                         }
 
                         ChatTopBar(
                             hazeState = hazeState,
+                            hazeBlurEnabled = hazeBlurEnabled,
+                            pillChrome = listDetailActive,
+                            showBackButton = detailPaneShowBackButton(),
                             onBack = {
                                 runNav { navController.navigateUp() }
                             },
@@ -1488,54 +1576,108 @@ fun ChatScreen(
             }
         }
 
-        expandedImage?.let { (msg, idx) ->
-            val key = imageAttachmentKey(msg, idx)
-            ImageFullscreenPreview(
+        val fullscreenHost = LocalChatFullscreenImageController.current
+        DisposableEffect(fullscreenHost) {
+            onDispose { fullscreenHost?.request = null }
+        }
+        val expandedImageSnapshot = expandedImage
+        SideEffect {
+            val host = fullscreenHost ?: return@SideEffect
+            val pair = expandedImageSnapshot
+            if (pair == null) {
+                if (host.request != null) host.request = null
+                return@SideEffect
+            }
+            val (msg, idx) = pair
+            host.onDismiss = {
+                isImageClosing = false
+                expandedImage = null
+            }
+            host.onClosingChange = { closing -> isImageClosing = closing }
+            host.onReply = { m ->
+                replyTo = m
+                if (editingMessage != null) {
+                    editingMessage = null
+                    inputText = ""
+                }
+                isImageClosing = false
+                expandedImage = null
+            }
+            host.onDelete = { m ->
+                scope.launch { panel.handleDeleteMessage(m.id) }
+            }
+            host.onSave = save@{ savedMsg, fileIndex ->
+                if (!isMessageImageFullyLoaded(savedMsg, fileIndex)) return@save
+                val file = savedMsg.files?.getOrNull(fileIndex) ?: return@save
+                resolveImageSourceUri(savedMsg, fileIndex)?.let { source ->
+                    saveMessageImage(
+                        SavableMessageImage(
+                            fileIndex = fileIndex,
+                            sourceUri = source,
+                            filename = file.name,
+                            mimeType = mimeTypeForImageFilename(file.name),
+                        ),
+                    )
+                }
+            }
+            val published = ChatFullscreenImageRequest(
                 message = msg,
                 fileIndex = idx,
                 currentUserId = currentUserId,
-                onDismiss = {
-                    isImageClosing = false
-                    expandedImage = null
-                },
-                onClosingChange = { isImageClosing = it },
-                onReply = { m ->
-                    replyTo = m
-                    if (editingMessage != null) {
-                        editingMessage = null
-                        inputText = ""
-                    }
-                    isImageClosing = false
-                    expandedImage = null
-                },
-                onDelete = { m ->
-                    scope.launch {
-                        panel.handleDeleteMessage(m.id)
-                    }
-                },
-                onSave = { msg, fileIndex ->
-                    if (!isMessageImageFullyLoaded(msg, fileIndex)) return@ImageFullscreenPreview
-                    val file = msg.files?.getOrNull(fileIndex) ?: return@ImageFullscreenPreview
-                    resolveImageSourceUri(msg, fileIndex)?.let { source ->
-                        saveMessageImage(
-                            SavableMessageImage(
-                                fileIndex = fileIndex,
-                                sourceUri = source,
-                                filename = file.name,
-                                mimeType = mimeTypeForImageFilename(file.name),
-                            ),
-                        )
-                    }
-                },
-                sharedTransitionScope = null,
-                animatedVisibilityScope = null,
-                sharedImageKey = null,
-                modifier = Modifier.fillMaxSize(),
-                thumbnailBounds = imageThumbBounds[key]
+                thumbnailBounds = imageThumbBounds[imageAttachmentKey(msg, idx)],
             )
+            if (host.request != published) host.request = published
+        }
+        if (fullscreenHost == null) {
+            expandedImage?.let { (msg, idx) ->
+                ImageFullscreenPreview(
+                    message = msg,
+                    fileIndex = idx,
+                    currentUserId = currentUserId,
+                    onDismiss = {
+                        isImageClosing = false
+                        expandedImage = null
+                    },
+                    onClosingChange = { isImageClosing = it },
+                    onReply = { m ->
+                        replyTo = m
+                        if (editingMessage != null) {
+                            editingMessage = null
+                            inputText = ""
+                        }
+                        isImageClosing = false
+                        expandedImage = null
+                    },
+                    onDelete = { m ->
+                        scope.launch {
+                            panel.handleDeleteMessage(m.id)
+                        }
+                    },
+                    onSave = { savedMsg, fileIndex ->
+                        if (!isMessageImageFullyLoaded(savedMsg, fileIndex)) {
+                            return@ImageFullscreenPreview
+                        }
+                        val file = savedMsg.files?.getOrNull(fileIndex) ?: return@ImageFullscreenPreview
+                        resolveImageSourceUri(savedMsg, fileIndex)?.let { source ->
+                            saveMessageImage(
+                                SavableMessageImage(
+                                    fileIndex = fileIndex,
+                                    sourceUri = source,
+                                    filename = file.name,
+                                    mimeType = mimeTypeForImageFilename(file.name),
+                                ),
+                            )
+                        }
+                    },
+                    sharedTransitionScope = null,
+                    animatedVisibilityScope = null,
+                    sharedImageKey = null,
+                    modifier = Modifier.fillMaxSize(),
+                    thumbnailBounds = imageThumbBounds[imageAttachmentKey(msg, idx)],
+                )
+            }
         }
     }
-
 }
 
 @Composable
@@ -1583,8 +1725,8 @@ private fun ChatScrollToBottomButton(
     contentDescription: String,
     hazeState: HazeState,
     modifier: Modifier = Modifier,
+    hazeBlurEnabled: Boolean = true,
 ) {
-    val hazeStyle = rememberChatSurfaceContainerHazeStyle()
     Box(
         modifier = modifier
             .size(ChatScrollToBottomButtonSize)
@@ -1598,7 +1740,10 @@ private fun ChatScrollToBottomButton(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.91f))
-                .hazeEffect(state = hazeState, style = hazeStyle),
+                .hazeBlur(
+                    input = HazeInput.Backdrop(hazeState),
+                    style = rememberChatSurfaceContainerHazeStyle().then { blurEnabled(hazeBlurEnabled) },
+                ),
         )
         Icon(
             imageVector = Icons.Rounded.KeyboardArrowDown,

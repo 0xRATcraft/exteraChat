@@ -1,0 +1,338 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.1.4). Overrides tag when set."
+        required: true
+        type: string
+      skip_publish:
+        description: "Build only; skip GitHub Release upload"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g -Dkotlin.daemon.jvm.options=-Xmx6g
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version: $V" >&2
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+
+  windows-common:
+    needs: resolve-version
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-java-gradle
+      - uses: ./.github/actions/set-version
+        with:
+          version: ${{ needs.resolve-version.outputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: ./.github/actions/cache-cargo-windows
+      - name: Build arch-independent Windows tooling and compile JVM
+        shell: bash
+        run: |
+          export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"
+          ./gradlew \
+            :app:desktop:buildWindowsSetupRust \
+            :app:shared:compileKotlinJvm \
+            :utils:shared:compileKotlinJvm \
+            :app:desktop:compileKotlin \
+            :app:desktop:jar \
+            --no-daemon \
+            --console=plain
+      - name: Upload Windows Rust installer tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-rust-tools
+          path: app/desktop/windows-setup/target/release/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-package:
+    needs: [resolve-version, windows-common]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-java-gradle
+      - uses: ./.github/actions/set-version
+        with:
+          version: ${{ needs.resolve-version.outputs.version }}
+      - name: Ensure ARM64 packaging JDK
+        if: matrix.arch == 'arm64'
+        shell: cmd
+        run: call scripts\ensure-windows-arm64-jdk.cmd
+      - name: Restore Windows Rust installer tools
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-rust-tools
+          path: app/desktop/windows-setup/target/release
+      - name: Package Windows ${{ matrix.arch }} installer
+        shell: bash
+        env:
+          FROMCHAT_SKIP_RUST_BUILD: "1"
+        run: |
+          export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"
+          args=(
+            :app:desktop:createReleaseDistributable
+            :app:desktop:patchWindowsJpackageReleaseIcon
+            :app:desktop:packSetupOnly
+            "-PdesktopArch=${{ matrix.arch }}"
+            --no-daemon
+            --console=plain
+          )
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            args+=("-PwindowsArm64")
+          fi
+          ./gradlew "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: app/desktop/build/distributions/release/*-windows-${{ matrix.arch }}.exe
+          if-no-files-found: error
+
+  macos:
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            java-architecture: ""
+          - arch: x64
+            java-architecture: x64
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-java-gradle
+        with:
+          java-architecture: ${{ matrix.java-architecture }}
+      - uses: ./.github/actions/set-version
+        with:
+          version: ${{ needs.resolve-version.outputs.version }}
+      - name: Cache DMG background tooling
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/desktop/dmg-background/node_modules
+            ~/.cache/ms-playwright
+          key: dmg-tools-${{ hashFiles('app/desktop/dmg-background/package-lock.json') }}
+          restore-keys: dmg-tools-
+      - name: Install macOS packaging tools
+        run: |
+          if ! command -v create-dmg >/dev/null 2>&1; then
+            brew install create-dmg
+          fi
+          DMG_DIR="app/desktop/dmg-background"
+          if [[ ! -f "$DMG_DIR/node_modules/playwright/package.json" ]]; then
+            npm --prefix "$DMG_DIR" install --no-fund --no-audit
+            npm --prefix "$DMG_DIR" exec playwright install chromium
+          fi
+      - name: Package macOS ${{ matrix.arch }}
+        run: |
+          export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"
+          ./gradlew :app:desktop:packageReleaseMac -PdesktopArch=${{ matrix.arch }} --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: app/desktop/build/distributions/release/*-macOS-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  linux:
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+            appimage: appimagetool-x86_64.AppImage
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            appimage: appimagetool-aarch64.AppImage
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-java-gradle
+      - uses: ./.github/actions/set-version
+        with:
+          version: ${{ needs.resolve-version.outputs.version }}
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot rpm binutils libfuse2 wget
+          CACHE_DIR="${RUNNER_TOOL_CACHE}/appimagetool"
+          mkdir -p "$CACHE_DIR"
+          TOOL="$CACHE_DIR/appimagetool-${{ matrix.arch }}.AppImage"
+          if [[ ! -f "$TOOL" ]]; then
+            wget -q "https://github.com/AppImage/appimagetool/releases/download/continuous/${{ matrix.appimage }}" -O "$TOOL"
+            chmod +x "$TOOL"
+          fi
+          echo "APPIMAGETOOL=$TOOL" >> "$GITHUB_ENV"
+      - name: Package Linux ${{ matrix.arch }}
+        run: |
+          export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"
+          ./gradlew :app:desktop:packageReleaseLinux -PdesktopArch=${{ matrix.arch }} --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            app/desktop/build/distributions/release/*-linux-${{ matrix.arch }}.deb
+            app/desktop/build/distributions/release/*-linux-${{ matrix.arch }}.rpm
+            app/desktop/build/distributions/release/*-linux-${{ matrix.arch }}.AppImage
+          if-no-files-found: error
+
+  android:
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-java-gradle
+      - uses: android-actions/setup-android@v3
+      - uses: ./.github/actions/set-version
+        with:
+          version: ${{ needs.resolve-version.outputs.version }}
+      - name: Cache Android SDK extras
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/build-cache
+            ~/.android/cache
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml', 'app/android/build.gradle.kts') }}
+          restore-keys: android-sdk-${{ runner.os }}-
+      - name: Prepare Android signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE_BASE64" || -z "$GOOGLE_SERVICES_JSON" ]]; then
+            echo "Missing ANDROID_KEYSTORE_BASE64 or ANDROID_GOOGLE_SERVICES_JSON secrets" >&2
+            exit 1
+          fi
+          mkdir -p app/android/keys
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > app/android/keys/release.jks
+          keytool -genkeypair -noprompt \
+            -alias key0 -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=FromChat Debug" \
+            -keystore app/android/keys/debug.jks \
+            -storepass android -keypass android
+          cat > app/android/keys/keystore.properties <<EOF
+releaseStorePassword=${RELEASE_STORE_PASSWORD}
+releaseKeyPassword=${RELEASE_KEY_PASSWORD}
+debugStorePassword=android
+debugKeyPassword=android
+EOF
+          printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > app/android/google-services.json
+      - name: Build universal Android APK
+        run: ./gradlew :app:android:assembleRelease --no-daemon --console=plain
+      - name: Stage APK
+        run: |
+          mkdir -p release-staging
+          APK="$(find app/android/build/outputs/apk/release -name '*release*.apk' | head -n 1)"
+          cp "$APK" "release-staging/FromChat-${{ needs.resolve-version.outputs.version }}-android-universal.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: release-staging/*.apk
+          if-no-files-found: error
+
+  publish:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.skip_publish == false }}
+    needs:
+      - resolve-version
+      - windows-package
+      - macos
+      - linux
+      - android
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( \
+            -name '*.dmg' -o \
+            -name '*.deb' -o \
+            -name '*.rpm' -o \
+            -name '*.AppImage' -o \
+            -name '*.exe' -o \
+            -name '*.apk' \
+          \) -exec cp {} release-assets/ \;
+          ls -la release-assets
+          VERSION="${{ needs.resolve-version.outputs.version }}"
+          for pattern in \
+            "*-windows-x64.exe" \
+            "*-windows-arm64.exe" \
+            "*-macOS-x64.dmg" \
+            "*-macOS-arm64.dmg" \
+            "*-linux-x64.deb" \
+            "*-linux-arm64.deb" \
+            "*-linux-x64.rpm" \
+            "*-linux-arm64.rpm" \
+            "*-linux-x64.AppImage" \
+            "*-linux-arm64.AppImage" \
+            "*-android-universal.apk"
+          do
+            if ! compgen -G "release-assets/$pattern" > /dev/null; then
+              echo "Missing release asset: $pattern" >&2
+              exit 1
+            fi
+          done
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.tag }}
+          name: FromChat ${{ needs.resolve-version.outputs.version }}
+          draft: false
+          generate_release_notes: true
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

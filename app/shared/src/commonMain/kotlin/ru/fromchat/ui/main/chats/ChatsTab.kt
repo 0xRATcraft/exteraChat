@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,16 +54,15 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.Color
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +75,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import ru.fromchat.ui.extraStatusBars
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,16 +97,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.pr0gramm3r101.utils.supportClipboardManagerImpl
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Res
 import ru.fromchat.action_delete
 import ru.fromchat.action_mark_read
+import ru.fromchat.logo_square
 import ru.fromchat.api.ApiClient
 import ru.fromchat.api.ChatListSync
 import ru.fromchat.api.StatusSubscriptionCoordinator
@@ -139,8 +141,12 @@ import ru.fromchat.status_connecting
 import ru.fromchat.status_updating
 import ru.fromchat.account_suspended
 import ru.fromchat.ui.LocalNavController
+import ru.fromchat.ui.main.LocalConversationListDetailActive
+import ru.fromchat.ui.main.LocalDesktopChatsNavController
 import ru.fromchat.ui.main.LocalMainChromeInsets
-import ru.fromchat.ui.chat.panels.dm.DmNav
+import ru.fromchat.ui.chat.panels.dm.navigateToDmChat
+import ru.fromchat.ui.chat.panels.publicchat.navigateToPublicChat
+import ru.fromchat.ui.chat.utils.PendingChatAttachmentDrops
 import ru.fromchat.ui.components.BackHandler
 import ru.fromchat.ui.components.BrandTitle
 import ru.fromchat.ui.components.ConnectingEllipsis
@@ -336,23 +342,30 @@ private fun rememberSearchBarCollapseSnap(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun chatsTopAppBarColors(blurReveal: Float) = TopAppBarDefaults.topAppBarColors(
-    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f - blurReveal.coerceIn(0f, 1f)),
+    // Two-pane list sits on AppPanel (`surfaceContainerLowest`); compact uses `surface`.
+    containerColor = (
+        if (LocalConversationListDetailActive.current) {
+            MaterialTheme.colorScheme.surfaceContainerLowest
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+        ).copy(alpha = 1f - blurReveal.coerceIn(0f, 1f)),
     scrolledContainerColor = Color.Transparent,
 )
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun ChatsTopBarHazeBackdrop(
     hazeState: HazeState,
     blurReveal: Float,
+    blurEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .graphicsLayer { alpha = blurReveal.coerceIn(0f, 1f) }
-            .hazeEffect(
-                state = hazeState,
-                style = HazeMaterials.thin(),
+            .hazeBlur(
+                input = HazeInput.Backdrop(hazeState),
+                style = HazeMaterials.thin().then { blurEnabled(blurEnabled) },
             ),
     )
 }
@@ -371,7 +384,12 @@ private fun ChatsNormalTopBar(
 ) {
     TopAppBar(
         modifier = modifier,
-        windowInsets = WindowInsets.statusBars,
+        // Shell already applies/consumes status insets in list–detail; avoid double top padding.
+        windowInsets = if (LocalMainChromeInsets.current.top > 0.dp) {
+            WindowInsets.extraStatusBars
+        } else {
+            WindowInsets(0, 0, 0, 0)
+        },
         colors = chatsTopAppBarColors(blurReveal),
         title = {
             Row(
@@ -379,8 +397,8 @@ private fun ChatsNormalTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start,
             ) {
-                AsyncImage(
-                    model = Res.getUri("drawable/logo_square.svg"),
+                Image(
+                    painter = painterResource(Res.drawable.logo_square),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -465,7 +483,11 @@ private fun ChatsSelectionTopBar(
 
     TopAppBar(
         modifier = modifier,
-        windowInsets = WindowInsets.statusBars,
+        windowInsets = if (LocalMainChromeInsets.current.top > 0.dp) {
+            WindowInsets.extraStatusBars
+        } else {
+            WindowInsets(0, 0, 0, 0)
+        },
         colors = chatsTopAppBarColors(blurReveal),
         navigationIcon = {
             IconButton(onClick = onClose) {
@@ -518,7 +540,7 @@ private fun ChatsSelectionTopBar(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatsTab(
     isVisible: Boolean = true,
@@ -526,8 +548,10 @@ fun ChatsTab(
     chatContextMenuOverlay: ChatContextMenuOverlayController,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
+    enterSelectionRequestId: Long = 0L,
 ) {
-    val navController = LocalNavController.current
+    val navController =
+        LocalDesktopChatsNavController.current ?: LocalNavController.current
     val clipboard = supportClipboardManagerImpl
     val haptic = rememberHapticFeedback()
     val scope = rememberCoroutineScope()
@@ -573,7 +597,7 @@ fun ChatsTab(
     val publicChatProfile = publicChatProfileFromFlow ?: publicChatProfileFromDisk
     val searchBarHint = stringResource(Res.string.search_title)
     val tabListState = rememberLazyListState()
-    val topChromeHazeState = rememberHazeState(blurEnabled = isVisible)
+    val topChromeHazeState = rememberHazeState()
     val statusMap by UserStatusStore.status.collectAsState()
     var subscribedDmUserIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
     val statusSubscriptionScope = rememberCoroutineScope()
@@ -610,6 +634,8 @@ fun ChatsTab(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingDeleteUserIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
+    var hadNonEmptySelection by remember { mutableStateOf(false) }
+
     fun enterSelectionModeFor(target: ChatContextMenuTarget, userId: Int?) {
         haptic(HapticFeedbackEvent.SelectionModeEntered)
         listMode = ChatsListMode.Selecting
@@ -619,10 +645,15 @@ fun ChatsTab(
             ChatContextMenuTarget.Public -> publicChatSelected = true
             ChatContextMenuTarget.Dm -> userId?.let { selectedOtherUserIds = setOf(it) }
         }
-        scope.launch {
-            selectionTransitionProgress.snapTo(0f)
-            selectionTransitionProgress.animateTo(1f, ChatSelectionTransitionSpring)
-        }
+    }
+
+    fun enterSelectionModeEmpty() {
+        if (listMode == ChatsListMode.Selecting) return
+        haptic(HapticFeedbackEvent.SelectionModeEntered)
+        hadNonEmptySelection = false
+        listMode = ChatsListMode.Selecting
+        publicChatSelected = false
+        selectedOtherUserIds = emptySet()
     }
 
     fun exitSelectionMode() {
@@ -630,6 +661,7 @@ fun ChatsTab(
         listMode = ChatsListMode.Normal
         publicChatSelected = false
         selectedOtherUserIds = emptySet()
+        hadNonEmptySelection = false
         contextMenuState = ChatContextMenuState()
         chatContextMenuOverlay.clear()
     }
@@ -639,6 +671,18 @@ fun ChatsTab(
             selectionTransitionProgress.animateTo(0f, ChatSelectionTransitionSpring)
             exitSelectionMode()
         }
+    }
+
+    LaunchedEffect(listMode) {
+        if (listMode == ChatsListMode.Selecting) {
+            selectionTransitionProgress.snapTo(0f)
+            selectionTransitionProgress.animateTo(1f, ChatSelectionTransitionSpring)
+        }
+    }
+
+    LaunchedEffect(enterSelectionRequestId, isVisible) {
+        if (enterSelectionRequestId == 0L || !isVisible) return@LaunchedEffect
+        enterSelectionModeEmpty()
     }
 
     fun refreshDmList() {
@@ -665,9 +709,13 @@ fun ChatsTab(
         }
     }
 
-    LaunchedEffect(publicChatSelected, selectedOtherUserIds) {
-        if (listMode == ChatsListMode.Selecting && !publicChatSelected && selectedOtherUserIds.isEmpty()) {
-            requestExitSelectionMode()
+    LaunchedEffect(publicChatSelected, selectedOtherUserIds, listMode) {
+        if (listMode != ChatsListMode.Selecting) return@LaunchedEffect
+        val empty = !publicChatSelected && selectedOtherUserIds.isEmpty()
+        if (empty) {
+            if (hadNonEmptySelection) requestExitSelectionMode()
+        } else {
+            hadNonEmptySelection = true
         }
     }
 
@@ -789,7 +837,6 @@ fun ChatsTab(
         ),
     )
     val rowRevealProgress = chatContextMenuOverlay.rowRevealProgress
-    val overlayCloneReady = chatContextMenuOverlay.overlayCloneReady
     val callsEnabled = ServerConfig.callsEnabled
 
     fun markSelectedChatsRead() {
@@ -837,6 +884,7 @@ fun ChatsTab(
         PredictiveBackHandler(
             enabled = selectionMode,
             onProgress = { backProgress ->
+                if (!selectionMode) return@PredictiveBackHandler
                 scope.launch {
                     selectionTransitionProgress.snapTo((1f - backProgress).coerceIn(0f, 1f))
                 }
@@ -927,7 +975,6 @@ fun ChatsTab(
                         publicChatSelected = publicChatSelected,
                         selectedOtherUserIds = selectedOtherUserIds,
                         contextMenuState = contextMenuState,
-                        overlayCloneReady = overlayCloneReady,
                         rowRevealProgress = rowRevealProgress,
                         listContentPadding = PaddingValues(top = fixedTopBarHeight),
                         showSearchBar = true,
@@ -946,7 +993,7 @@ fun ChatsTab(
                             when {
                                 selectionMode && publicChatSelected -> publicChatSelected = false
                                 selectionMode -> publicChatSelected = true
-                                else -> navController.navigate("chats/publicChat")
+                                else -> navController.navigateToPublicChat()
                             }
                         },
                         onOpenConversation = { userId ->
@@ -957,8 +1004,21 @@ fun ChatsTab(
 
                                 selectionMode -> selectedOtherUserIds += userId
 
-                                userId != 0 -> navController.navigate(DmNav.chatRoute(userId))
+                                userId != 0 -> navController.navigateToDmChat(userId)
                             }
+                        },
+                        attachmentDropEnabled = !selectionMode && !suspensionState.isSuspended,
+                        onDropAttachmentsOnPublic = { uris ->
+                            if (uris.isEmpty() || suspensionState.isSuspended) return@ChatConversationsList
+                            PendingChatAttachmentDrops.offer(PendingChatAttachmentDrops.publicKey(), uris)
+                            navController.navigateToPublicChat()
+                        },
+                        onDropAttachmentsOnConversation = { userId, uris ->
+                            if (userId == 0 || uris.isEmpty() || suspensionState.isSuspended) {
+                                return@ChatConversationsList
+                            }
+                            PendingChatAttachmentDrops.offer(PendingChatAttachmentDrops.dmKey(userId), uris)
+                            navController.navigateToDmChat(userId)
                         },
                         onAvatarContextMenuPressStart = { lazyIndex, target, userId, rowOffset, rowSize, position, groupCount ->
                             if (suspensionState.isSuspended) return@ChatConversationsList
@@ -992,7 +1052,21 @@ fun ChatsTab(
                                 return@ChatConversationsList
                             }
                             haptic(HapticFeedbackEvent.ContextMenuOpened)
-                            chatContextMenuOverlay.overlayCloneReady = false
+                            contextMenuState = ChatContextMenuState(
+                                phase = ChatContextMenuPhase.Animating,
+                                target = target,
+                                otherUserId = userId,
+                                listIndex = lazyIndex,
+                                rowOffset = rowOffset,
+                                rowSize = rowSize,
+                                listItemPosition = position,
+                                groupItemCount = groupCount,
+                            )
+                        },
+                        onMouseRowContextMenu = { lazyIndex, target, userId, _, rowOffset, rowSize, position, groupCount ->
+                            if (suspensionState.isSuspended) return@ChatConversationsList
+                            haptic(HapticFeedbackEvent.ContextMenuOpened)
+                            avatarPressMark = null
                             contextMenuState = ChatContextMenuState(
                                 phase = ChatContextMenuPhase.Animating,
                                 target = target,
@@ -1032,6 +1106,7 @@ fun ChatsTab(
                 ChatsTopBarHazeBackdrop(
                     hazeState = topChromeHazeState,
                     blurReveal = topBarBlurReveal,
+                    blurEnabled = isVisible,
                     modifier = Modifier.matchParentSize(),
                 )
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -1079,9 +1154,9 @@ fun ChatsTab(
         }
         chatContextMenuOverlay.onMessage = {
             when (contextMenuState.target) {
-                ChatContextMenuTarget.Public -> navController.navigate("chats/publicChat")
+                ChatContextMenuTarget.Public -> navController.navigateToPublicChat()
                 ChatContextMenuTarget.Dm -> {
-                    contextMenuState.otherUserId?.let { navController.navigate(DmNav.chatRoute(it)) }
+                    contextMenuState.otherUserId?.let { navController.navigateToDmChat(it) }
                 }
             }
         }
@@ -1127,9 +1202,6 @@ fun ChatsTab(
                 animatingOut = true,
             )
         }
-        chatContextMenuOverlay.onOverlayCloneReady = {
-            chatContextMenuOverlay.overlayCloneReady = true
-        }
 
         val shouldPublishOverlay = isVisible &&
             contextMenuState.isOverlayReplicaActive &&
@@ -1151,25 +1223,16 @@ fun ChatsTab(
                 selectedOtherUserIds = selectedOtherUserIds,
                 isReadOnly = suspensionState.isSuspended,
                 callsEnabled = callsEnabled,
-                publicHasUnread = false,
+                publicHasUnread = (publicChatPreviewState?.unreadCount ?: 0) > 0,
             )
         } else {
             null
         }
         if (chatContextMenuOverlay.uiState != overlayUiState) {
-            val previousOverlay = chatContextMenuOverlay.uiState
             chatContextMenuOverlay.uiState = overlayUiState
             if (overlayUiState == null) {
                 chatContextMenuOverlay.blurProgress = 0f
                 chatContextMenuOverlay.rowRevealProgress = 0f
-                chatContextMenuOverlay.overlayCloneReady = false
-            } else {
-                val isNewOverlaySession = previousOverlay == null ||
-                    previousOverlay.contextMenuState.listIndex != overlayUiState.contextMenuState.listIndex ||
-                    !previousOverlay.contextMenuState.isOverlayReplicaActive
-                if (isNewOverlaySession) {
-                    chatContextMenuOverlay.overlayCloneReady = false
-                }
             }
         }
 
@@ -1219,7 +1282,6 @@ internal fun ChatContextMenuOverlayHost(
             uiState.contextMenuState.otherUserId?.let(controller.onDelete)
         },
         onSelect = controller.onSelect,
-        onOverlayCloneReady = controller.onOverlayCloneReady,
         modifier = modifier,
     )
 }
@@ -1239,7 +1301,6 @@ private fun ChatContextMenuOverlay(
     onMarkRead: () -> Unit,
     onDelete: () -> Unit,
     onSelect: () -> Unit,
-    onOverlayCloneReady: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contextMenuState = uiState.contextMenuState
@@ -1432,7 +1493,7 @@ private fun ChatContextMenuOverlay(
     LaunchedEffect(contextMenuState.phase, menuSize, layoutReady) {
         if (contextMenuState.phase != ChatContextMenuPhase.Open || !layoutReady) return@LaunchedEffect
         if (revealProgress.value < 1f) {
-            revealProgress.snapTo(1f)
+            revealProgress.animateTo(1f, ChatContextMenuRevealSpring)
         }
         if (menuOpenProgress < 1f) {
             animate(
@@ -1442,17 +1503,6 @@ private fun ChatContextMenuOverlay(
             ) { value, _ ->
                 menuOpenProgress = value
             }
-        }
-    }
-
-    LaunchedEffect(
-        layoutReady,
-        contextMenuState.listIndex,
-        contextMenuState.target,
-        contextMenuState.otherUserId,
-    ) {
-        if (layoutReady && contextMenuState.isOverlayReplicaActive) {
-            onOverlayCloneReady()
         }
     }
 

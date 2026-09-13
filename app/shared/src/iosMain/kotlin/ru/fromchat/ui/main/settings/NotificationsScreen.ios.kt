@@ -11,6 +11,14 @@ actual fun openAppNotificationSettings(): Boolean {
     return UIApplication.sharedApplication.openURL(url)
 }
 
-actual fun areAppNotificationsEnabled(): Boolean {
-    return true
-}
+actual fun areAppNotificationsEnabled(): Boolean = false
+
+actual fun arePushNotificationsSupported(): Boolean = false
+
+actual fun areDesktopMessageNotificationsSupported(): Boolean = false
+
+actual fun areDesktopMessageNotificationsEnabled(): Boolean = false
+
+actual fun setDesktopMessageNotificationsEnabled(enabled: Boolean) = Unit
+
+actual fun requestDesktopNotificationPermission(): Boolean = false

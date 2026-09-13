@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,12 +29,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,12 +52,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -60,8 +69,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastAll
 import kotlin.math.roundToInt
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Logger
@@ -77,6 +88,7 @@ import ru.fromchat.message_edited_suffix
 import ru.fromchat.message_reply_jump_cd
 import ru.fromchat.message_reply_photo
 import ru.fromchat.message_send_failed
+import ru.fromchat.supportsMouseMessageInteraction
 import ru.fromchat.ui.chat.utils.imageAspectRatioForMessage
 import ru.fromchat.ui.chat.utils.imageAttachmentKey
 import ru.fromchat.ui.components.Text
@@ -106,6 +118,37 @@ private fun isMessageCorrupted(message: Message): Boolean {
         if (isPlainPublic) return@any false
         message.dmEnvelope == null ||
             message.fileThumbnails?.getOrNull(index)?.isBlank() != false
+    }
+}
+
+/** First pointer-down event; does not require the press to be unconsumed. */
+private suspend fun AwaitPointerEventScope.awaitEventFirstDown(): PointerEvent {
+    var event: PointerEvent
+    do {
+        event = awaitPointerEvent()
+    } while (!event.changes.fastAll { it.changedToDown() })
+    return event
+}
+
+/**
+ * Secondary-click only. Primary clicks pass through so [SelectionContainer] can select text.
+ * Skips already-consumed presses (e.g. text-selection context menu).
+ */
+private fun Modifier.onMouseSecondaryClick(
+    key: Any?,
+    enabled: Boolean,
+    onSecondaryClick: (localOffset: Offset) -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(key) {
+        awaitEachGesture {
+            val event = awaitEventFirstDown()
+            if (!event.buttons.isSecondaryPressed) return@awaitEachGesture
+            val change = event.changes.firstOrNull() ?: return@awaitEachGesture
+            if (change.isConsumed) return@awaitEachGesture
+            event.changes.forEach { it.consume() }
+            onSecondaryClick(change.position)
+        }
     }
 }
 
@@ -204,24 +247,6 @@ fun MessageItem(
     val isCorrupted = remember(message.files, message.fileThumbnails, message.dmEnvelope) {
         isMessageCorrupted(message)
     }
-    val primaryIsImageMessage = remember(
-        message.pendingFileUri,
-        message.pendingFilename,
-        message.files,
-    ) {
-        val pendingIsImage = when {
-            message.pendingFileUri != null &&
-                DecryptedImageCache.isDecryptedImageCacheUri(message.pendingFileUri) -> true
-            message.pendingFilename?.isNotBlank() == true ->
-                isImageFilename(message.pendingFilename)
-            message.pendingFileUri != null -> isImageFilename(
-                message.pendingFileUri.substringAfterLast('/').substringBefore('?')
-            )
-            else -> false
-        }
-        pendingIsImage ||
-            message.files?.firstOrNull()?.let { isImageFilename(it.name) } == true
-    }
     val formattedTime = remember(message.timestamp) {
         formatMessageTimeLocal(message.timestamp)
     }
@@ -246,7 +271,17 @@ fun MessageItem(
     var replyPressed by remember(message.id) { mutableStateOf(false) }
     var rowLayoutCoords by remember(message.id) { mutableStateOf<LayoutCoordinates?>(null) }
     var bubbleContentCoords by remember(message.id) { mutableStateOf<LayoutCoordinates?>(null) }
-    val scaleTarget = if (isPressed && !isContextMenuForThisMessage && !isContextMenuOpen) 0.96f else 1f
+    LaunchedEffect(isContextMenuForThisMessage) {
+        if (isContextMenuForThisMessage) {
+            // Keep the press squash briefly so the bubble can animate down, then release
+            // so it springs back up as the menu opens.
+            delay(48)
+            isPressed = false
+        } else {
+            isPressed = false
+        }
+    }
+    val scaleTarget = if (isPressed) 0.96f else 1f
     val avatarScaleTarget = if (avatarPressed && !isContextMenuOpen) 0.96f else 1f
     val replyScaleTarget = if (replyPressed && !isContextMenuOpen) 0.96f else 1f
     val scale by animateFloatAsState(
@@ -322,22 +357,17 @@ fun MessageItem(
                 "enterFinished=$enterFinished scale=${enterScale.value}",
         )
     }
-    LaunchedEffect(enterIdentity, isNewEnterRole, primaryIsImageMessage) {
-        if (isNewEnterRole && primaryIsImageMessage) {
-            enterStarted = true
-            enterFinished = true
-            enterScale.snapTo(1f)
-        } else if (isNewEnterRole && !enterStarted) {
+    LaunchedEffect(enterIdentity, isNewEnterRole) {
+        if (isNewEnterRole && !enterStarted) {
             enterStarted = true
             enterFinished = false
             enterScale.snapTo(0f)
         }
     }
-    val runEnterAnimation =
-        enterStarted && !enterFinished && !isExiting && !primaryIsImageMessage
+    val runEnterAnimation = enterStarted && !enterFinished && !isExiting
     // Single effect: start the spring as soon as this bubble is marked for enter.
-    LaunchedEffect(enterIdentity, runEnterAnimation, primaryIsImageMessage) {
-        if (primaryIsImageMessage || !runEnterAnimation) return@LaunchedEffect
+    LaunchedEffect(enterIdentity, runEnterAnimation) {
+        if (!runEnterAnimation) return@LaunchedEffect
         Logger.d(
             "EnterAnim",
             "spring_start identity=${enterIdentity.take(12)} " +
@@ -455,26 +485,38 @@ fun MessageItem(
             )
         }
 
+        val mouseMessageUi = supportsMouseMessageInteraction()
+
+        val openMessageMenu: (LayoutCoordinates?, Offset) -> Unit = { coords, localOffset ->
+            if (coords != null && coords.isAttached) {
+                onTapPosition(coords.localToWindow(localOffset))
+            }
+            isPressed = true
+            onLongPress()
+        }
+
         val rowLongPress =
             if (isContextMenuOpen) Modifier
-            else Modifier.pointerInput(message.id, onLongPress) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onLongPress = { localOffset ->
-                        val coords = rowLayoutCoords
-                        if (coords != null && coords.isAttached) {
-                            onTapPosition(coords.localToRoot(localOffset))
-                        }
-                        onLongPress()
-                    },
-                )
+            else if (mouseMessageUi) {
+                Modifier.onMouseSecondaryClick(message.id, enabled = true) { localOffset ->
+                    openMessageMenu(rowLayoutCoords, localOffset)
+                }
+            } else {
+                Modifier.pointerInput(message.id, onLongPress) {
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
+                            try {
+                                awaitRelease()
+                            } finally {
+                                isPressed = false
+                            }
+                        },
+                        onLongPress = { localOffset ->
+                            openMessageMenu(rowLayoutCoords, localOffset)
+                        },
+                    )
+                }
             }
 
         Row(
@@ -534,7 +576,7 @@ fun MessageItem(
             BoxWithConstraints(
                 modifier = Modifier.weight(1f, fill = false)
             ) {
-                val maxBubbleWidth = maxWidth * 0.7f
+                val maxBubbleWidth = minOf(maxWidth * 0.7f, 420.dp)
 
                 Column(
                     horizontalAlignment = if (isAuthor) Alignment.End else Alignment.Start
@@ -580,26 +622,40 @@ fun MessageItem(
                         if (isContextMenuOpen) Modifier
                         else Modifier
                             .onGloballyPositioned { bubbleContentCoords = it }
-                            .pointerInput(message.id, onBubbleTap, onLongPress) {
-                                detectTapGestures(
-                                    onPress = {
-                                        isPressed = true
-                                        try {
-                                            awaitRelease()
-                                        } finally {
-                                            isPressed = false
-                                        }
-                                    },
-                                    onTap = { onBubbleTap?.invoke() },
-                                    onLongPress = { localOffset ->
-                                        val coords = bubbleContentCoords
-                                        if (coords != null && coords.isAttached) {
-                                            onTapPosition(coords.localToRoot(localOffset))
-                                        }
-                                        onLongPress()
-                                    },
-                                )
-                            }
+                            .then(
+                                if (mouseMessageUi) {
+                                    Modifier.onMouseSecondaryClick(
+                                        message.id,
+                                        enabled = true,
+                                    ) { localOffset ->
+                                        openMessageMenu(bubbleContentCoords, localOffset)
+                                    }
+                                } else {
+                                    Modifier.pointerInput(
+                                        message.id,
+                                        onBubbleTap,
+                                        onLongPress,
+                                    ) {
+                                        detectTapGestures(
+                                            onPress = {
+                                                isPressed = true
+                                                try {
+                                                    awaitRelease()
+                                                } finally {
+                                                    isPressed = false
+                                                }
+                                            },
+                                            onTap = { onBubbleTap?.invoke() },
+                                            onLongPress = { localOffset ->
+                                                openMessageMenu(
+                                                    bubbleContentCoords,
+                                                    localOffset,
+                                                )
+                                            },
+                                        )
+                                    }
+                                },
+                            )
 
                     Box {
                         Column(
@@ -640,11 +696,23 @@ fun MessageItem(
                                         Modifier.padding(start = 8.dp, end = 8.dp, bottom = 4.dp)
                                     val usernameInset =
                                         Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                    if (onUsernameClick != null) {
-                                        Box(
-                                            modifier = usernameOutset
-                                                .clip(usernameShape)
-                                                .pointerInput(message.id, onUsernameClick) {
+                                    val usernameGestures =
+                                        if (mouseMessageUi) {
+                                            Modifier
+                                                .onMouseSecondaryClick(
+                                                    message.id,
+                                                    enabled = !isContextMenuOpen,
+                                                ) { localOffset ->
+                                                    openMessageMenu(
+                                                        rowLayoutCoords,
+                                                        localOffset,
+                                                    )
+                                                }
+                                                .pointerInput(
+                                                    message.id,
+                                                    onUsernameClick,
+                                                    onBubbleTap,
+                                                ) {
                                                     detectTapGestures(
                                                         onPress = {
                                                             isPressed = true
@@ -654,25 +722,56 @@ fun MessageItem(
                                                                 isPressed = false
                                                             }
                                                         },
-                                                        onTap = { onUsernameClick.invoke() },
-                                                        onLongPress = {
-                                                            val coords = bubbleContentCoords
-                                                            if (
-                                                                coords != null &&
-                                                                coords.isAttached
-                                                            ) {
-                                                                val center = Offset(
-                                                                    coords.size.width / 2f,
-                                                                    coords.size.height / 2f,
-                                                                )
-                                                                onTapPosition(
-                                                                    coords.localToRoot(center),
-                                                                )
-                                                            }
-                                                            onLongPress()
+                                                        onTap = {
+                                                            onUsernameClick?.invoke()
+                                                                ?: onBubbleTap?.invoke()
                                                         },
                                                     )
                                                 }
+                                        } else {
+                                            Modifier.pointerInput(
+                                                message.id,
+                                                onUsernameClick,
+                                                onBubbleTap,
+                                                onLongPress,
+                                            ) {
+                                                detectTapGestures(
+                                                    onPress = {
+                                                        isPressed = true
+                                                        try {
+                                                            awaitRelease()
+                                                        } finally {
+                                                            isPressed = false
+                                                        }
+                                                    },
+                                                    onTap = {
+                                                        onUsernameClick?.invoke()
+                                                            ?: onBubbleTap?.invoke()
+                                                    },
+                                                    onLongPress = {
+                                                        val coords = bubbleContentCoords
+                                                        if (
+                                                            coords != null &&
+                                                            coords.isAttached
+                                                        ) {
+                                                            val center = Offset(
+                                                                coords.size.width / 2f,
+                                                                coords.size.height / 2f,
+                                                            )
+                                                            onTapPosition(
+                                                                coords.localToWindow(center),
+                                                            )
+                                                        }
+                                                        onLongPress()
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    if (onUsernameClick != null) {
+                                        Box(
+                                            modifier = usernameOutset
+                                                .clip(usernameShape)
+                                                .then(usernameGestures),
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -693,36 +792,7 @@ fun MessageItem(
                                         }
                                     } else {
                                         Box(
-                                            modifier = usernameOutset
-                                                .pointerInput(message.id, onBubbleTap) {
-                                                    detectTapGestures(
-                                                        onPress = {
-                                                            isPressed = true
-                                                            try {
-                                                                awaitRelease()
-                                                            } finally {
-                                                                isPressed = false
-                                                            }
-                                                        },
-                                                        onTap = { onBubbleTap?.invoke() },
-                                                        onLongPress = {
-                                                            val coords = bubbleContentCoords
-                                                            if (
-                                                                coords != null &&
-                                                                coords.isAttached
-                                                            ) {
-                                                                val center = Offset(
-                                                                    coords.size.width / 2f,
-                                                                    coords.size.height / 2f,
-                                                                )
-                                                                onTapPosition(
-                                                                    coords.localToRoot(center),
-                                                                )
-                                                            }
-                                                            onLongPress()
-                                                        },
-                                                    )
-                                                },
+                                            modifier = usernameOutset.then(usernameGestures),
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -745,7 +815,15 @@ fun MessageItem(
                                 }
 
                                 Box(modifier = Modifier.fillMaxWidth()) {
-                                    Column {
+                                    Column(
+                                        verticalArrangement = if (
+                                            replyRef != null && primaryIsImageContent
+                                        ) {
+                                            Arrangement.spacedBy(6.dp)
+                                        } else {
+                                            Arrangement.Top
+                                        },
+                                    ) {
                                         replyRef?.let { replyToMsg ->
                                             MessageReplyQuote(
                                                 replyTo = replyToMsg,
@@ -757,6 +835,8 @@ fun MessageItem(
                                                 isContextMenuOpen = isContextMenuOpen,
                                                 onReplyClick = onReplyClick,
                                                 onReplyPressedChange = { replyPressed = it },
+                                                inImageBubble = primaryIsImageContent,
+                                                hasAttachmentBelow = primaryIsImageContent,
                                             )
                                         }
 
@@ -1021,12 +1101,62 @@ fun MessageItem(
                                             !isCorrupted &&
                                             !isFilenameOnlyMessageCaption(message)
                                         ) {
-                                            Text(
-                                                text = message.content,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = contentColor,
-                                                modifier = Modifier.padding(horizontal = 14.dp)
-                                            )
+                                            // I-beam over message text: SelectionContainer registers
+                                            // PointerIcon.Text on Android/desktop; outer hover icon
+                                            // covers padding and ContextMenuArea gaps on desktop.
+                                            val selectableTextModifier = Modifier
+                                                .pointerHoverIcon(
+                                                    PointerIcon.Text,
+                                                    overrideDescendants = true,
+                                                )
+                                                .padding(horizontal = 14.dp)
+                                            if (mouseMessageUi) {
+                                                // Default selection colors use primary; on author
+                                                // bubbles that matches the background, so
+                                                // highlight/handles are invisible.
+                                                val selectionHandle =
+                                                    if (isAuthor) {
+                                                        contentColor
+                                                    } else {
+                                                        MaterialTheme.colorScheme.primary
+                                                    }
+                                                ProvideChatTextSelectionMenu {
+                                                    CompositionLocalProvider(
+                                                        LocalTextSelectionColors provides
+                                                            TextSelectionColors(
+                                                                handleColor = selectionHandle,
+                                                                backgroundColor =
+                                                                    selectionHandle.copy(
+                                                                        alpha = 0.35f,
+                                                                    ),
+                                                            ),
+                                                    ) {
+                                                        SelectionContainer(
+                                                            modifier = Modifier.pointerHoverIcon(
+                                                                PointerIcon.Text,
+                                                                overrideDescendants = true,
+                                                            ),
+                                                        ) {
+                                                            Text(
+                                                                text = message.content,
+                                                                style = MaterialTheme.typography.bodyLarge,
+                                                                color = contentColor,
+                                                                modifier = selectableTextModifier,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                // Android (and touch): still show text cursor when a
+                                                // mouse/trackpad hovers the caption; selection stays
+                                                // off so long-press keeps opening the message menu.
+                                                Text(
+                                                    text = message.content,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = contentColor,
+                                                    modifier = selectableTextModifier,
+                                                )
+                                            }
                                         }
                                             }
                                         }
@@ -1136,6 +1266,8 @@ private fun MessageReplyQuote(
     isContextMenuOpen: Boolean,
     onReplyClick: ((Int) -> Unit)?,
     onReplyPressedChange: (Boolean) -> Unit,
+    inImageBubble: Boolean = false,
+    hasAttachmentBelow: Boolean = false,
 ) {
     val replyName = messageDisplayUsername(replyTo, currentUserId)
     val replyTapEnabled = onReplyClick != null && replyTo.id > 0
@@ -1180,7 +1312,12 @@ private fun MessageReplyQuote(
 
     Box(
         Modifier
-            .padding(bottom = 4.dp, start = 6.dp, end = 6.dp)
+            .padding(
+                top = if (inImageBubble) 6.dp else 0.dp,
+                bottom = if (hasAttachmentBelow) 0.dp else 4.dp,
+                start = 6.dp,
+                end = 6.dp,
+            )
             .graphicsLayer(
                 scaleX = replyScale,
                 scaleY = replyScale,

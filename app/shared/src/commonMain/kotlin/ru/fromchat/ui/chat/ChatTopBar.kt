@@ -19,9 +19,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Call
@@ -61,16 +62,21 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.pr0gramm3r101.utils.conditional
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Res
 import ru.fromchat.chat_members_count
 import ru.fromchat.ui.chat.utils.TypingUser
 import ru.fromchat.ui.components.ConnectingEllipsis
 import ru.fromchat.ui.components.Text
+import ru.fromchat.ui.extraStatusBars
+import ru.fromchat.ui.main.ConversationDetailContentPadding
 import ru.fromchat.ui.profile.StatusBadge
 import ru.fromchat.ui.profile.peerIsDeleted
 import ru.fromchat.ui.profile.resolveVerificationStatus
@@ -325,7 +331,26 @@ fun ChatTopBar(
     callContentDescription: String,
     titleChrome: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    hazeBlurEnabled: Boolean = true,
+    pillChrome: Boolean = false,
+    showBackButton: Boolean = true,
 ) {
+    if (pillChrome) {
+        ChatTopBarPill(
+            hazeState = hazeState,
+            onBack = onBack,
+            backContentDescription = backContentDescription,
+            showCallButton = showCallButton,
+            onCallClick = onCallClick,
+            callContentDescription = callContentDescription,
+            titleChrome = titleChrome,
+            modifier = modifier,
+            hazeBlurEnabled = hazeBlurEnabled,
+            showBackButton = showBackButton,
+        )
+        return
+    }
+
     val bottomCornerRadius = ChatFloatingHeaderBottomArcRadius
     // [BottomInsetTopBarShape] draws the arc in the strip from y = (content height) .. (content + r);
     // stack measured bar height + that depth so the scallop is never overlapped by TopAppBar children.
@@ -336,18 +361,20 @@ fun ChatTopBar(
         val topBarPlaceable = subcompose("topBar") {
             TopAppBar(
                 modifier = Modifier.fillMaxWidth(),
-                windowInsets = WindowInsets.statusBars,
+                windowInsets = WindowInsets.extraStatusBars,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     scrolledContainerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = backContentDescription
-                        )
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = backContentDescription
+                            )
+                        }
                     }
                 },
                 title = { titleChrome() },
@@ -378,14 +405,111 @@ fun ChatTopBar(
                             BottomInsetTopBarShape(bottomCornerRadius)
                         }
                     )
-                    .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.91f))
-                    .hazeEffect(state = hazeState, style = rememberChatSurfaceContainerHazeStyle()),
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .hazeBlur(
+                        input = HazeInput.Backdrop(hazeState),
+                        style = rememberChatSurfaceContainerHazeStyle().then { blurEnabled(hazeBlurEnabled) },
+                    ),
             )
         }.first().measure(Constraints.fixed(layoutWidth, layoutHeight))
 
         layout(layoutWidth, layoutHeight) {
             bgPlaceable.place(0, 0)
             topBarPlaceable.place(0, 0)
+        }
+    }
+}
+
+/**
+ * Two-pane chat chrome: separate back pill + title pill. Matches [ChatInput] composer chrome
+ * ([rememberChatSurfaceContainerHazeStyle] + [androidx.compose.material3.ColorScheme.surfaceContainer]).
+ * Full-bleed progressive haze strip behind the pills uses [HazeMaterials.thin] (high at top → fade
+ * toward bottom); pills keep surfaceContainer + [rememberChatSurfaceContainerHazeStyle].
+ * Horizontal inset matches [ChatInput].
+ */
+@Composable
+private fun ChatTopBarPill(
+    hazeState: HazeState,
+    onBack: () -> Unit,
+    backContentDescription: String,
+    showCallButton: Boolean,
+    onCallClick: () -> Unit,
+    callContentDescription: String,
+    titleChrome: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    hazeBlurEnabled: Boolean = true,
+    showBackButton: Boolean = true,
+) {
+    val hazeStyle = rememberChatSurfaceContainerHazeStyle().then { blurEnabled(hazeBlurEnabled) }
+    val chromeColor = MaterialTheme.colorScheme.surfaceContainer
+    val pillShape = RoundedCornerShape(28.dp)
+
+    Box(modifier = modifier.fillMaxWidth()) {
+        // Progressive blur only — not part of the pill chrome.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .hazeBlur(
+                    input = HazeInput.Backdrop(hazeState),
+                    style = HazeMaterials.thin().then {
+                        blurEnabled(hazeBlurEnabled)
+                        progressive(
+                            HazeProgressive.verticalGradient(
+                                startIntensity = 1f,
+                                endIntensity = 0f,
+                            ),
+                        )
+                    },
+                ),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.extraStatusBars)
+                .padding(horizontal = ConversationDetailContentPadding, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (showBackButton) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(chromeColor)
+                        .hazeBlur(input = HazeInput.Backdrop(hazeState), style = hazeStyle),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = backContentDescription,
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(chromeColor, pillShape)
+                    .clip(pillShape)
+                    .hazeBlur(input = HazeInput.Backdrop(hazeState), style = hazeStyle)
+                    .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f)) {
+                    titleChrome()
+                }
+                if (showCallButton) {
+                    IconButton(onClick = onCallClick) {
+                        Icon(
+                            imageVector = Icons.Rounded.Call,
+                            contentDescription = callContentDescription,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -447,19 +571,26 @@ private class BottomInsetTopBarShape(private val cornerRadius: Dp) : Shape {
 }
 
 /**
- * [HazeStyle] for chat chrome using only [androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer]
- * (24dp blur + luminance-scaled tint, slightly denser than old “thin” defaults), without [dev.chrisbanes.haze.materials.HazeMaterials].
+ * [HazeBlurStyle] for chat chrome using only [androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainer]
+ * (24dp blur + luminance-scaled tint, slightly denser than old “thin” defaults), without
+ * [dev.chrisbanes.haze.blur.materials.HazeMaterials].
  */
 @Composable
-fun rememberChatSurfaceContainerHazeStyle(): HazeStyle {
+fun rememberChatSurfaceContainerHazeStyle(): HazeBlurStyle {
     val surface = MaterialTheme.colorScheme.surfaceContainer
 
     return remember(surface) {
-        HazeStyle(
-            blurRadius = 24.dp,
-            backgroundColor = surface,
-            tint = HazeTint(surface.copy(alpha = if (surface.luminance() >= 0.5f) 0.74f else 0.79f)),
-        )
+        HazeBlurStyle {
+            blurRadius(24.dp)
+            backgroundColor(surface)
+            colorEffects(
+                listOf(
+                    HazeColorEffect.tint(
+                        surface.copy(alpha = if (surface.luminance() >= 0.5f) 0.74f else 0.79f),
+                    ),
+                ),
+            )
+        }
     }
 }
 

@@ -1,22 +1,24 @@
 package ru.fromchat.ui.main
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -32,6 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,72 +47,226 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.navigation.NavController
+import com.pr0gramm3r101.utils.WindowWidthSizeClass
+import com.pr0gramm3r101.utils.currentWindowAdaptiveInfo
+import com.pr0gramm3r101.utils.widthSizeClass
+import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.HazeColorEffect
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
-import ru.fromchat.ui.chat.rememberChatSurfaceContainerHazeStyle
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Res
 import ru.fromchat.api.ApiClient
 import ru.fromchat.chats
 import ru.fromchat.contacts
+import ru.fromchat.desktop.DesktopMenuCommand
+import ru.fromchat.desktop.DesktopMenuCommands
 import ru.fromchat.profile
 import ru.fromchat.settings
 import ru.fromchat.ui.LocalNavController
+import ru.fromchat.ui.chat.rememberChatSurfaceContainerHazeStyle
+import ru.fromchat.ui.chat.panels.dm.navigateToDmChat
+import ru.fromchat.ui.components.BackHandler
 import ru.fromchat.ui.components.FromChatSnackbarHost
+import ru.fromchat.ui.components.LocalPaneHazeState
 import ru.fromchat.ui.components.Text
+import ru.fromchat.ui.extraStatusBars
 import ru.fromchat.ui.main.chats.ChatContextMenuOverlayController
 import ru.fromchat.ui.main.chats.ChatContextMenuOverlayHost
+import ru.fromchat.ui.main.chats.ChatsSearchScreen
 import ru.fromchat.ui.main.chats.ChatsTab
 import ru.fromchat.ui.main.settings.SettingsTab
 import ru.fromchat.ui.profile.ProfileScreen
 
-private const val PAGE_CHATS = 0
-private const val PAGE_CONTACTS = 1
-private const val PAGE_SETTINGS = 2
-private const val PAGE_PROFILE = 3
+const val MAIN_PAGE_CHATS = 0
+const val MAIN_PAGE_CONTACTS = 1
+const val MAIN_PAGE_SETTINGS = 2
+const val MAIN_PAGE_PROFILE = 3
+
+private const val PAGE_CHATS = MAIN_PAGE_CHATS
+private const val PAGE_CONTACTS = MAIN_PAGE_CONTACTS
+private const val PAGE_SETTINGS = MAIN_PAGE_SETTINGS
+private const val PAGE_PROFILE = MAIN_PAGE_PROFILE
 private const val PAGE_COUNT = 4
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+/**
+ * Opens the signed-in user's profile in the list–detail pane (large screens).
+ *
+ * File-private (not a local fun inside [MainScreen]) so desktop JVM incremental runs do not
+ * chase missing nested classes like `MainScreenKt$MainScreen$openOwnProfileInDetailPane$1`.
+ */
+private fun openOwnProfileInDetailPane(navController: NavController) {
+    val userId = ApiClient.user?.id?.takeIf { it > 0 } ?: return
+    navController.navigateReplacingMainDetail(route = "profile/$userId")
+}
+
+/**
+ * Switches the main hub pager page. On large screens, Profile is a button: selects Settings
+ * in the list and opens own profile in the detail pane (Profile is never the active tab).
+ *
+ * Kept file-private (not nested in [MainScreen]) for the same desktop JVM class-loading reason
+ * as [openOwnProfileInDetailPane] / ChatRowAvatar gesture helpers.
+ *
+ * Skips pager animation and detail navigation when the destination is already showing.
+ */
+private fun selectMainPage(
+    page: Int,
+    widthClass: WindowWidthSizeClass,
+    scope: CoroutineScope,
+    pagerState: PagerState,
+    settingsDetailNavController: NavController,
+) {
+    when {
+        page == PAGE_PROFILE && widthClass != WindowWidthSizeClass.COMPACT -> {
+            val alreadyOnSettingsList = pagerState.currentPage == PAGE_SETTINGS
+            val ownUserId = ApiClient.user?.id?.takeIf { it > 0 }
+            val alreadyShowingOwnProfile =
+                ownUserId != null &&
+                    settingsDetailNavController.isCurrentMainDetailRoute("profile/$ownUserId")
+            if (alreadyOnSettingsList && alreadyShowingOwnProfile) return
+            if (!alreadyOnSettingsList) {
+                scope.launch { pagerState.animateScrollToPage(PAGE_SETTINGS) }
+            }
+            if (!alreadyShowingOwnProfile) {
+                openOwnProfileInDetailPane(settingsDetailNavController)
+            }
+        }
+        else -> {
+            // Desktop list–detail: do not pop the chat (or settings) stack — each tab
+            // keeps its own detail host, so switching tabs must not wipe the other tab.
+            if (pagerState.currentPage == page) return
+            scope.launch { pagerState.animateScrollToPage(page) }
+        }
+    }
+}
+
+/**
+ * @param embeddedInListDetail When true, this screen is the left pane of a list–detail layout.
+ * Nav chrome stays inside this pane (bottom bar), never spanning the window.
+ * @param initialPage Pager page when showing the full MainScreen.
+ * @param forceSettingsTab When true, scrolls the pager to settings (settings/profile detail open).
+ * Does not snap back when cleared — avoids fighting user tab changes.
+ * @param onPageChanged Invoked when the pager settles on a page (for list–detail empty panes).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     snackbarHostState: SnackbarHostState? = null,
+    embeddedInListDetail: Boolean = false,
+    initialPage: Int = PAGE_CHATS,
+    forceSettingsTab: Boolean = false,
+    onPageChanged: (Int) -> Unit = {},
 ) {
     val effectiveSnackbarHostState = snackbarHostState ?: remember { SnackbarHostState() }
     val navController = LocalNavController.current
+    val settingsDetailNavController =
+        LocalDesktopSettingsNavController.current ?: navController
     val pagerState = rememberPagerState(
-        initialPage = PAGE_CHATS,
+        initialPage = initialPage.coerceIn(0, PAGE_COUNT - 1),
         pageCount = { PAGE_COUNT },
     )
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val navBarHazeState = rememberHazeState(blurEnabled = true)
+    val navBarHazeState = rememberHazeState()
     val navBarHazeStyle = rememberChatSurfaceContainerHazeStyle()
-    val contextMenuHazeState = rememberHazeState(blurEnabled = true)
+    val paneHazeState = LocalPaneHazeState.current
+    val contextMenuHazeState = paneHazeState ?: rememberHazeState()
     val chatContextMenuOverlay = remember { ChatContextMenuOverlayController() }
+    var chatListSelectionRequestId by remember { mutableStateOf(0L) }
+    var paneSearchOpen by remember { mutableStateOf(false) }
+
+    fun openConversationSearch() {
+        if (embeddedInListDetail) {
+            paneSearchOpen = true
+        } else {
+            navController.navigate("search/conversations") {
+                launchSingleTop = true
+            }
+        }
+    }
+
+    val widthClass = currentWindowAdaptiveInfo().widthSizeClass
+
+    LaunchedEffect(forceSettingsTab) {
+        if (forceSettingsTab && pagerState.currentPage != PAGE_SETTINGS) {
+            pagerState.scrollToPage(PAGE_SETTINGS)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        DesktopMenuCommands.commands.collect { command ->
+            when (command) {
+                DesktopMenuCommand.NewChat,
+                DesktopMenuCommand.SearchConversations,
+                -> {
+                    if (pagerState.currentPage != PAGE_CHATS) {
+                        pagerState.scrollToPage(PAGE_CHATS)
+                    }
+                    openConversationSearch()
+                }
+                DesktopMenuCommand.EnterChatListSelection -> {
+                    if (paneSearchOpen) {
+                        paneSearchOpen = false
+                    }
+                    if (navController.currentBackStackEntry?.destination?.route ==
+                        "search/conversations"
+                    ) {
+                        navController.popBackStack()
+                    }
+                    if (pagerState.currentPage != PAGE_CHATS) {
+                        pagerState.scrollToPage(PAGE_CHATS)
+                    }
+                    chatListSelectionRequestId += 1
+                }
+                DesktopMenuCommand.OpenAbout -> {
+                    if (pagerState.currentPage != PAGE_SETTINGS) {
+                        pagerState.scrollToPage(PAGE_SETTINGS)
+                    }
+                }
+            }
+        }
+    }
 
     val selectedPage = pagerState.currentPage
+    LaunchedEffect(selectedPage) {
+        onPageChanged(selectedPage)
+    }
     val isChatsPage = selectedPage == PAGE_CHATS
     val chatMenuBlurProgress = chatContextMenuOverlay.blurProgress
 
-    val statusBarTopDp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // List–detail shell already pads/consumes safeDrawing ∪ extraStatusBars; do not re-apply top.
+    val statusBarTop = if (embeddedInListDetail) {
+        0.dp
+    } else {
+        with(density) {
+            WindowInsets.extraStatusBars.getTop(this).toDp()
+        }
+    }
     var bottomChromeHeightDp by remember { mutableStateOf(0.dp) }
 
-    val mainChromeInsets = remember(statusBarTopDp, bottomChromeHeightDp) {
+    val mainChromeInsets = remember(statusBarTop, bottomChromeHeightDp) {
         MainChromeInsets(
-            top = statusBarTopDp,
+            top = statusBarTop,
             bottom = bottomChromeHeightDp,
         )
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val chatsLabel = stringResource(Res.string.chats)
+    val contactsLabel = stringResource(Res.string.contacts)
+    val settingsLabel = stringResource(Res.string.settings)
+    val profileLabel = stringResource(Res.string.profile)
+
+    BoxWithConstraints(
+        Modifier.fillMaxSize(),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -138,16 +295,16 @@ fun MainScreen(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
                             beyondViewportPageCount = 1,
+                            userScrollEnabled = widthClass == WindowWidthSizeClass.COMPACT,
                         ) { page ->
                             when (page) {
                                 PAGE_CHATS -> ChatsTab(
                                     isVisible = isChatsPage,
-                                    onOpenSearch = {
-                                        navController.navigate("search/conversations")
-                                    },
+                                    onOpenSearch = { openConversationSearch() },
                                     chatContextMenuOverlay = chatContextMenuOverlay,
                                     sharedTransitionScope = sharedTransitionScope,
                                     animatedVisibilityScope = animatedVisibilityScope,
+                                    enterSelectionRequestId = chatListSelectionRequestId,
                                 )
                                 PAGE_CONTACTS -> ContactsTab()
                                 PAGE_SETTINGS -> SettingsTab()
@@ -160,7 +317,9 @@ fun MainScreen(
                                             .fillMaxSize()
                                             .mainPagerBottomInset(),
                                         onOpenSettings = {
-                                            scope.launch { pagerState.animateScrollToPage(PAGE_SETTINGS) }
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(PAGE_SETTINGS)
+                                            }
                                         },
                                     )
                                 }
@@ -184,7 +343,7 @@ fun MainScreen(
                         }
                     }
                     .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .hazeEffect(state = navBarHazeState, style = navBarHazeStyle),
+                    .hazeBlur(input = HazeInput.Backdrop(navBarHazeState), style = navBarHazeStyle),
             ) {
                 NavigationBar(
                     modifier = Modifier.fillMaxWidth(),
@@ -195,34 +354,72 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = selectedPage == PAGE_CHATS,
                         onClick = {
-                            scope.launch { pagerState.animateScrollToPage(PAGE_CHATS) }
+                            selectMainPage(
+                                page = PAGE_CHATS,
+                                widthClass = widthClass,
+                                scope = scope,
+                                pagerState = pagerState,
+                                settingsDetailNavController = settingsDetailNavController,
+                            )
                         },
-                        label = { Text(stringResource(Res.string.chats)) },
-                        icon = { Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null) },
+                        label = { Text(chatsLabel) },
+                        icon = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Chat,
+                                contentDescription = null,
+                            )
+                        },
                     )
                     NavigationBarItem(
                         selected = selectedPage == PAGE_CONTACTS,
                         onClick = {
-                            scope.launch { pagerState.animateScrollToPage(PAGE_CONTACTS) }
+                            selectMainPage(
+                                page = PAGE_CONTACTS,
+                                widthClass = widthClass,
+                                scope = scope,
+                                pagerState = pagerState,
+                                settingsDetailNavController = settingsDetailNavController,
+                            )
                         },
-                        label = { Text(stringResource(Res.string.contacts)) },
-                        icon = { Icon(Icons.Filled.Contacts, contentDescription = null) },
+                        label = { Text(contactsLabel) },
+                        icon = {
+                            Icon(Icons.Filled.Contacts, contentDescription = null)
+                        },
                     )
                     NavigationBarItem(
                         selected = selectedPage == PAGE_SETTINGS,
                         onClick = {
-                            scope.launch { pagerState.animateScrollToPage(PAGE_SETTINGS) }
+                            selectMainPage(
+                                page = PAGE_SETTINGS,
+                                widthClass = widthClass,
+                                scope = scope,
+                                pagerState = pagerState,
+                                settingsDetailNavController = settingsDetailNavController,
+                            )
                         },
-                        label = { Text(stringResource(Res.string.settings)) },
-                        icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                        label = { Text(settingsLabel) },
+                        icon = {
+                            Icon(Icons.Filled.Settings, contentDescription = null)
+                        },
                     )
                     NavigationBarItem(
-                        selected = selectedPage == PAGE_PROFILE,
+                        // Two-pane: Profile is a shortcut button — never selected; Settings stays
+                        // highlighted while own profile is open in the detail pane.
+                        selected = widthClass == WindowWidthSizeClass.COMPACT &&
+                            selectedPage == PAGE_PROFILE,
                         onClick = {
-                            scope.launch { pagerState.animateScrollToPage(PAGE_PROFILE) }
+                            selectMainPage(
+                                page = PAGE_PROFILE,
+                                widthClass = widthClass,
+                                scope = scope,
+                                pagerState = pagerState,
+                                settingsDetailNavController = settingsDetailNavController,
+                            )
                         },
-                        label = { Text(stringResource(Res.string.profile)) },
-                        icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        label = { Text(profileLabel) },
+                        icon = {
+                            Icon(Icons.Filled.Person, contentDescription = null)
+                        },
                     )
                 }
             }
@@ -232,9 +429,7 @@ fun MainScreen(
             ChatContextMenuBlurLayer(
                 hazeState = contextMenuHazeState,
                 blurProgress = chatMenuBlurProgress,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(2f),
+                modifier = Modifier.zIndex(2f),
             )
         }
 
@@ -246,29 +441,66 @@ fun MainScreen(
                 .fillMaxSize()
                 .zIndex(3f),
         )
+
+        if (embeddedInListDetail) {
+            BackHandler(paneSearchOpen) { paneSearchOpen = false }
+            AnimatedVisibility(
+                visible = paneSearchOpen,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(4f),
+            ) {
+                val chatsNav = LocalDesktopChatsNavController.current ?: navController
+                ChatsSearchScreen(
+                    onBack = { paneSearchOpen = false },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = this,
+                    onOpenProfile = { userId: Int ->
+                        if (userId == 0) return@ChatsSearchScreen
+                        paneSearchOpen = false
+                        chatsNav.navigateReplacingMainDetail("profile/$userId")
+                    },
+                    onOpenConversation = { userId: Int ->
+                        if (userId == 0) return@ChatsSearchScreen
+                        paneSearchOpen = false
+                        chatsNav.navigateToDmChat(userId)
+                    },
+                )
+            }
+        }
     }
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun ChatContextMenuBlurLayer(
     hazeState: HazeState,
     blurProgress: Float,
     modifier: Modifier = Modifier,
 ) {
-    val blurRadius = 12.dp * blurProgress
+    val progress = blurProgress.coerceIn(0f, 1f)
+    val blurRadius = 12.dp * progress
     if (blurRadius <= 0.dp) return
 
+    // Opaque enough background so rounded chrome corners don't stay razor-sharp while
+    // interiors look frosted (Transparent + no tint left original AA edges unblurred).
+    // In-tree under the overlay (zIndex). Never use a Popup here: platform popups stack above
+    // the sharp row/menu, blur them, and intercept dismiss taps.
+    val surface = MaterialTheme.colorScheme.surfaceContainerLowest
+    val tint = HazeColorEffect.tint(surface.copy(alpha = 0.4f * progress))
     Box(
-        modifier = modifier.hazeEffect(
-            state = hazeState,
-            style = HazeStyle(
-                blurRadius = blurRadius,
-                tints = emptyList(),
-                backgroundColor = Color.Transparent,
-                noiseFactor = 0f,
-                fallbackTint = HazeTint(Color.Transparent),
+        modifier = modifier
+            .fillMaxSize()
+            .hazeBlur(
+                input = HazeInput.Backdrop(hazeState),
+                style = HazeBlurStyle {
+                    blurRadius(blurRadius)
+                    backgroundColor(surface)
+                    colorEffects(listOf(tint))
+                    noiseFactor(0f)
+                    fallbackColorEffect(tint)
+                },
             ),
-        ),
     )
 }

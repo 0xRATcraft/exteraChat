@@ -56,7 +56,11 @@ val fixComposeResourcesStructure = tasks.register<FixComposeResTask>("fixCompose
 
 extensions.configure<ApplicationExtension> {
     namespace = "ru.fromchat"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "ru.fromchat"
@@ -70,25 +74,41 @@ extensions.configure<ApplicationExtension> {
         }
     }
 
+    val keystorePropertiesFile = file("keys/keystore.properties")
+    val hasReleaseKeystore = keystorePropertiesFile.isFile && file("keys/release.jks").isFile
+    val hasDebugKeystore = keystorePropertiesFile.isFile && file("keys/debug.jks").isFile
+
     signingConfigs {
-        val keystoreProperties = Properties().apply {
-            load(file("keys/keystore.properties").inputStream())
-        }
+        if (hasReleaseKeystore || hasDebugKeystore) {
+            val keystoreProperties = Properties().apply {
+                load(keystorePropertiesFile.inputStream())
+            }
 
-        create("release") {
-            storeFile = file("keys/release.jks")
-            keyAlias = "key0"
-            storePassword = keystoreProperties["releaseStorePassword"].toString()
-            keyPassword = keystoreProperties["releaseKeyPassword"].toString()
-            enableV3Signing = true
-        }
+            fun Properties.password(key: String): String {
+                val raw = getProperty(key)
+                    ?: error("Missing $key in keys/keystore.properties")
+                return raw.trim().removeSurrounding("\"").removeSurrounding("'")
+            }
 
-        getByName("debug") {
-            storeFile = file("keys/debug.jks")
-            keyAlias = "debug"
-            storePassword = keystoreProperties["debugStorePassword"].toString()
-            keyPassword = keystoreProperties["debugKeyPassword"].toString()
-            enableV3Signing = true
+            if (hasReleaseKeystore) {
+                create("release") {
+                    storeFile = file("keys/release.jks")
+                    keyAlias = "key0"
+                    storePassword = keystoreProperties.password("releaseStorePassword")
+                    keyPassword = keystoreProperties.password("releaseKeyPassword")
+                    enableV3Signing = true
+                }
+            }
+
+            if (hasDebugKeystore) {
+                getByName("debug") {
+                    storeFile = file("keys/debug.jks")
+                    keyAlias = "key0"
+                    storePassword = keystoreProperties.password("debugStorePassword")
+                    keyPassword = keystoreProperties.password("debugKeyPassword")
+                    enableV3Signing = true
+                }
+            }
         }
     }
 
@@ -96,13 +116,17 @@ extensions.configure<ApplicationExtension> {
         debug {
             applicationIdSuffix = ".beta"
             versionNameSuffix = "-beta"
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasDebugKeystore) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
 
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

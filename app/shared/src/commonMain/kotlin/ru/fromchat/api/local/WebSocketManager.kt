@@ -29,6 +29,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import ru.fromchat.AppForeground
+import ru.fromchat.keepWebSocketAliveInBackground
 import ru.fromchat.Logger
 import ru.fromchat.api.ApiClient
 import ru.fromchat.api.UpdateSyncManager
@@ -64,23 +65,26 @@ object WebSocketManager {
     private val _messages = MutableSharedFlow<WebSocketMessage>(replay = 0, extraBufferCapacity = 64)
     val messages = _messages.asSharedFlow()
 
-    private val globalHandlers = mutableListOf<((WebSocketMessage) -> Unit)>()
-    private val sessionReadyHandlers = mutableListOf<suspend () -> Unit>()
+    @Volatile
+    private var globalHandlers: List<((WebSocketMessage) -> Unit)> = emptyList()
+
+    @Volatile
+    private var sessionReadyHandlers: List<suspend () -> Unit> = emptyList()
 
     fun addGlobalMessageHandler(handler: ((WebSocketMessage) -> Unit)) {
-        globalHandlers += handler
+        globalHandlers = globalHandlers + handler
     }
 
     fun removeGlobalMessageHandler(handler: ((WebSocketMessage) -> Unit)) {
-        globalHandlers -= handler
+        globalHandlers = globalHandlers - handler
     }
 
     fun addSessionReadyHandler(handler: suspend () -> Unit) {
-        sessionReadyHandlers += handler
+        sessionReadyHandlers = sessionReadyHandlers + handler
     }
 
     fun removeSessionReadyHandler(handler: suspend () -> Unit) {
-        sessionReadyHandlers -= handler
+        sessionReadyHandlers = sessionReadyHandlers - handler
     }
 
     private fun notifySessionReady() {
@@ -117,6 +121,7 @@ object WebSocketManager {
     }
 
     private suspend fun awaitForeground() {
+        if (keepWebSocketAliveInBackground()) return
         if (AppForeground.isInForeground.value) return
         AppForeground.isInForeground.first { it }
     }
@@ -256,7 +261,11 @@ object WebSocketManager {
                                     }
                                 }
 
-                                globalHandlers.forEach { it(msg) }
+                                globalHandlers.forEach { handler ->
+                                    runCatching { handler(msg) }.onFailure {
+                                        logW("Global handler failed: ${it.message}", it)
+                                    }
+                                }
                                 _messages.emit(msg)
                             } catch (e: Throwable) {
                                 logW("Received malformed payload: ${e.message}", e)
@@ -369,7 +378,7 @@ object WebSocketManager {
     }
 
     fun onNetworkAvailable() {
-        if (!AppForeground.isInForeground.value) return
+        if (!keepWebSocketAliveInBackground() && !AppForeground.isInForeground.value) return
 
         val now = Clock.System.now().toEpochMilliseconds()
         val prev = lastOnNetworkAvailableWallMs
@@ -393,7 +402,7 @@ object WebSocketManager {
      * Restarts the reconnect loop immediately instead of waiting out exponential backoff.
      */
     fun onServerLikelyReachable() {
-        if (!AppForeground.isInForeground.value) return
+        if (!keepWebSocketAliveInBackground() && !AppForeground.isInForeground.value) return
         if (session != null) return
         if (ApiClient.token.isNullOrEmpty()) return
 

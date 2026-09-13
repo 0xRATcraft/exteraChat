@@ -6,15 +6,23 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain(17)
+
     compilerOptions {
         freeCompilerArgs.addAll("-Xexpect-actual-classes")
     }
 
     android {
         namespace = "com.pr0gramm3r101.utils"
-        compileSdk = 37
+        compileSdk {
+            version = release(37) {
+                minorApiLevel = 2
+            }
+        }
         minSdk = 24
     }
+
+    jvm()
 
     listOf(
         iosArm64(),
@@ -57,6 +65,13 @@ kotlin {
 
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.multiplatform.settings)
+            implementation(libs.multiplatform.settings.coroutines)
+            implementation(libs.multiplatform.settings.serialization)
+        }
+
+        jvmMain.dependencies {
             implementation(libs.kotlinx.datetime)
             implementation(libs.multiplatform.settings)
             implementation(libs.multiplatform.settings.coroutines)
