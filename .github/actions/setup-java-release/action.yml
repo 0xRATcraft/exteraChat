@@ -1,0 +1,27 @@
+name: Setup Java (release)
+description: Temurin JDK for release workflows (Node 24–compatible setup-java v5)
+
+inputs:
+  java-version:
+    description: Java version
+    required: false
+    default: "17"
+  architecture:
+    description: Optional CPU architecture (x64 or aarch64)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v5
+      if: inputs.architecture != ''
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+        architecture: ${{ inputs.architecture }}
+    - uses: actions/setup-java@v5
+      if: inputs.architecture == ''
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}

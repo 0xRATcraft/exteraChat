@@ -9,3 +9,4 @@ runs:
         gradle-version: wrapper
         cache-read-only: false
         gradle-home-cache-cleanup: true
+        add-job-summary: as-logfile
