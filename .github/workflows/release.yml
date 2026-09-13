@@ -239,8 +239,9 @@ jobs:
           DMG_DIR="app/desktop/dmg-background"
           if [[ ! -f "$DMG_DIR/node_modules/playwright/package.json" ]]; then
             npm --prefix "$DMG_DIR" install --no-fund --no-audit
-            npm --prefix "$DMG_DIR" exec playwright install chromium
           fi
+          # Always sync browsers: node_modules cache can restore without matching ms-playwright binaries.
+          npm --prefix "$DMG_DIR" exec playwright install chromium
       - name: Package macOS ${{ matrix.arch }}
         run: |
           export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"
