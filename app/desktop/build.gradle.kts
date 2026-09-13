@@ -757,6 +757,8 @@ tasks.register<Copy>("exportReleaseProguardForCi") {
     dependsOn("proguardReleaseJars")
     from(releaseProguardOutputDir)
     into(ciProguardExportDir)
+    inputs.dir(releaseProguardOutputDir).withPropertyName("releaseProguardOutput")
+    outputs.dir(ciProguardExportDir).withPropertyName("ciProguardExport")
 }
 
 tasks.register<Copy>("stageCiPrebuiltProguard") {

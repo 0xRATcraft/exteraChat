@@ -9,8 +9,18 @@ plugins {
 }
 
 /** Single source of truth for app version (APK + generated [AppBuildInfo]). */
-extra["versionName"] = "1.1.4"
-extra["versionCode"] = 114
+private fun releaseVersionName(): String =
+    findProperty("versionName")?.toString()
+        ?: System.getenv("FROMCHAT_VERSION_NAME")
+        ?: "1.1.4"
+
+private fun releaseVersionCode(): Int =
+    findProperty("versionCode")?.toString()?.toIntOrNull()
+        ?: releaseVersionName().replace(Regex("[^0-9]"), "").toIntOrNull()?.takeIf { it > 0 }
+        ?: 114
+
+extra["versionName"] = releaseVersionName()
+extra["versionCode"] = releaseVersionCode()
 
 buildscript {
     repositories {

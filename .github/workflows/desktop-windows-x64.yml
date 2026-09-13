@@ -28,9 +28,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: wrapper
+      - uses: ./.github/actions/setup-gradle-release
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -54,10 +52,9 @@ jobs:
             V="${GITHUB_REF_NAME#win-x64-}"
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      - uses: ./.github/actions/set-version
-        with:
-          version: ${{ steps.ver.outputs.version }}
       - name: Package Windows x64 installer
+        env:
+          ORG_GRADLE_PROJECT_versionName: ${{ steps.ver.outputs.version }}
         shell: bash
         run: |
           export FROMCHAT_PACKAGING_JDK="$JAVA_HOME"

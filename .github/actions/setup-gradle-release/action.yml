@@ -1,0 +1,11 @@
+name: Setup Gradle (release)
+description: Gradle wrapper + GitHub Actions build cache for release workflows
+
+runs:
+  using: composite
+  steps:
+    - uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: wrapper
+        cache-read-only: false
+        gradle-home-cache-cleanup: true
