@@ -20,6 +20,7 @@ import ru.fromchat.ui.chat.panels.publicchat.PublicChatProfileRoute
 import ru.fromchat.ui.main.settings.AboutScreen
 import ru.fromchat.ui.main.settings.AppearanceScreen
 import ru.fromchat.ui.main.settings.DevicesScreen
+import ru.fromchat.ui.main.settings.ExteraChatCornerScreen
 import ru.fromchat.ui.main.settings.LOG_FILE_OPEN_RESULT_KEY
 import ru.fromchat.ui.main.settings.LogFilesScreen
 import ru.fromchat.ui.main.settings.LogsScreen
@@ -222,6 +223,10 @@ fun NavGraphBuilder.settingsDetailDestinations(
 
     composable(SettingsRoutes.Appearance) {
         AppearanceScreen(onBack = { navController.navigateUp() })
+    }
+
+    composable(SettingsRoutes.ExteraChatCorner) {
+        ExteraChatCornerScreen(onBack = { navController.navigateUp() })
     }
 
     composable(SettingsRoutes.Notifications) {

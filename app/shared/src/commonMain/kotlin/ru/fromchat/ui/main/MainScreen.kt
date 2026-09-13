@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +83,8 @@ import ru.fromchat.ui.main.chats.ChatContextMenuOverlayHost
 import ru.fromchat.ui.main.chats.ChatsSearchScreen
 import ru.fromchat.ui.main.chats.ChatsTab
 import ru.fromchat.ui.main.settings.SettingsTab
+import ru.fromchat.ui.main.settings.hideContactsUiState
+import ru.fromchat.ui.main.settings.hideProfileUiState
 import ru.fromchat.ui.profile.ProfileScreen
 
 const val MAIN_PAGE_CHATS = 0
@@ -93,7 +96,6 @@ private const val PAGE_CHATS = MAIN_PAGE_CHATS
 private const val PAGE_CONTACTS = MAIN_PAGE_CONTACTS
 private const val PAGE_SETTINGS = MAIN_PAGE_SETTINGS
 private const val PAGE_PROFILE = MAIN_PAGE_PROFILE
-private const val PAGE_COUNT = 4
 
 /**
  * Opens the signed-in user's profile in the list–detail pane (large screens).
@@ -118,30 +120,34 @@ private fun openOwnProfileInDetailPane(navController: NavController) {
 private fun selectMainPage(
     page: Int,
     widthClass: WindowWidthSizeClass,
+    visiblePages: List<Int>,
     scope: CoroutineScope,
     pagerState: PagerState,
     settingsDetailNavController: NavController,
 ) {
     when {
         page == PAGE_PROFILE && widthClass != WindowWidthSizeClass.COMPACT -> {
-            val alreadyOnSettingsList = pagerState.currentPage == PAGE_SETTINGS
+            val settingsIndex = visiblePages.indexOf(PAGE_SETTINGS)
+            val alreadyOnSettingsList = settingsIndex >= 0 && pagerState.currentPage == settingsIndex
             val ownUserId = ApiClient.user?.id?.takeIf { it > 0 }
             val alreadyShowingOwnProfile =
                 ownUserId != null &&
                     settingsDetailNavController.isCurrentMainDetailRoute("profile/$ownUserId")
             if (alreadyOnSettingsList && alreadyShowingOwnProfile) return
-            if (!alreadyOnSettingsList) {
-                scope.launch { pagerState.animateScrollToPage(PAGE_SETTINGS) }
+            if (!alreadyOnSettingsList && settingsIndex >= 0) {
+                scope.launch { pagerState.animateScrollToPage(settingsIndex) }
             }
             if (!alreadyShowingOwnProfile) {
                 openOwnProfileInDetailPane(settingsDetailNavController)
             }
         }
         else -> {
+            val pageIndex = visiblePages.indexOf(page)
+            if (pageIndex < 0) return
             // Desktop list–detail: do not pop the chat (or settings) stack — each tab
             // keeps its own detail host, so switching tabs must not wipe the other tab.
-            if (pagerState.currentPage == page) return
-            scope.launch { pagerState.animateScrollToPage(page) }
+            if (pagerState.currentPage == pageIndex) return
+            scope.launch { pagerState.animateScrollToPage(pageIndex) }
         }
     }
 }
@@ -169,10 +175,28 @@ fun MainScreen(
     val navController = LocalNavController.current
     val settingsDetailNavController =
         LocalDesktopSettingsNavController.current ?: navController
-    val pagerState = rememberPagerState(
-        initialPage = initialPage.coerceIn(0, PAGE_COUNT - 1),
-        pageCount = { PAGE_COUNT },
-    )
+
+    // Bottom-nav pages derive from the "Уголок exteraChat" toggles. Keep the pager in sync
+    // with the visible page order so hidden tabs are gone, not just unselected.
+    val visiblePages = remember(hideContactsUiState, hideProfileUiState) {
+        buildList {
+            add(PAGE_CHATS)
+            if (!hideContactsUiState) add(PAGE_CONTACTS)
+            add(PAGE_SETTINGS)
+            if (!hideProfileUiState) add(PAGE_PROFILE)
+        }
+    }
+    val initialPageId = visiblePages.firstOrNull { it == initialPage } ?: PAGE_CHATS
+    // Key on the corner-screen toggles: when a tab gets hidden/reshown the PagerState is
+    // recreated on the correct page. Without this, rememberPagerState's saveable saver restores
+    // the old pager index after popping the settings back stack, which then points to a
+    // different (or missing) tab once the visible-page list shrinks.
+    val pagerState = key(hideContactsUiState to hideProfileUiState) {
+        rememberPagerState(
+            initialPage = visiblePages.indexOf(initialPageId),
+            pageCount = { visiblePages.size },
+        )
+    }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val navBarHazeState = rememberHazeState()
@@ -195,20 +219,23 @@ fun MainScreen(
 
     val widthClass = currentWindowAdaptiveInfo().widthSizeClass
 
-    LaunchedEffect(forceSettingsTab) {
-        if (forceSettingsTab && pagerState.currentPage != PAGE_SETTINGS) {
-            pagerState.scrollToPage(PAGE_SETTINGS)
+    LaunchedEffect(forceSettingsTab, visiblePages) {
+        if (forceSettingsTab) {
+            val index = visiblePages.indexOf(PAGE_SETTINGS)
+            if (index >= 0 && pagerState.currentPage != index) {
+                pagerState.scrollToPage(index)
+            }
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(visiblePages) {
         DesktopMenuCommands.commands.collect { command ->
             when (command) {
                 DesktopMenuCommand.NewChat,
                 DesktopMenuCommand.SearchConversations,
                 -> {
-                    if (pagerState.currentPage != PAGE_CHATS) {
-                        pagerState.scrollToPage(PAGE_CHATS)
+                    if (pagerState.currentPage != visiblePages.indexOf(PAGE_CHATS)) {
+                        pagerState.scrollToPage(visiblePages.indexOf(PAGE_CHATS))
                     }
                     openConversationSearch()
                 }
@@ -221,25 +248,27 @@ fun MainScreen(
                     ) {
                         navController.popBackStack()
                     }
-                    if (pagerState.currentPage != PAGE_CHATS) {
-                        pagerState.scrollToPage(PAGE_CHATS)
+                    if (pagerState.currentPage != visiblePages.indexOf(PAGE_CHATS)) {
+                        pagerState.scrollToPage(visiblePages.indexOf(PAGE_CHATS))
                     }
                     chatListSelectionRequestId += 1
                 }
                 DesktopMenuCommand.OpenAbout -> {
-                    if (pagerState.currentPage != PAGE_SETTINGS) {
-                        pagerState.scrollToPage(PAGE_SETTINGS)
+                    if (pagerState.currentPage != visiblePages.indexOf(PAGE_SETTINGS)) {
+                        pagerState.scrollToPage(visiblePages.indexOf(PAGE_SETTINGS))
                     }
                 }
             }
         }
     }
 
-    val selectedPage = pagerState.currentPage
-    LaunchedEffect(selectedPage) {
-        onPageChanged(selectedPage)
+    val selectedPageIndex = pagerState.currentPage
+    val selectedPageId = visiblePages.getOrNull(selectedPageIndex) ?: PAGE_CHATS
+
+    LaunchedEffect(selectedPageId) {
+        onPageChanged(selectedPageId)
     }
-    val isChatsPage = selectedPage == PAGE_CHATS
+    val isChatsPage = selectedPageId == PAGE_CHATS
     val chatMenuBlurProgress = chatContextMenuOverlay.blurProgress
 
     // List–detail shell already pads/consumes safeDrawing ∪ extraStatusBars; do not re-apply top.
@@ -297,7 +326,7 @@ fun MainScreen(
                             beyondViewportPageCount = 1,
                             userScrollEnabled = widthClass == WindowWidthSizeClass.COMPACT,
                         ) { page ->
-                            when (page) {
+                            when (val pageId = visiblePages.getOrNull(page) ?: PAGE_CHATS) {
                                 PAGE_CHATS -> ChatsTab(
                                     isVisible = isChatsPage,
                                     onOpenSearch = { openConversationSearch() },
@@ -317,8 +346,12 @@ fun MainScreen(
                                             .fillMaxSize()
                                             .mainPagerBottomInset(),
                                         onOpenSettings = {
-                                            scope.launch {
-                                                pagerState.animateScrollToPage(PAGE_SETTINGS)
+                                            val settingsIndex =
+                                                visiblePages.indexOf(PAGE_SETTINGS)
+                                            if (settingsIndex >= 0) {
+                                                scope.launch {
+                                                    pagerState.animateScrollToPage(settingsIndex)
+                                                }
                                             }
                                         },
                                     )
@@ -351,76 +384,86 @@ fun MainScreen(
                     tonalElevation = 0.dp,
                     windowInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom),
                 ) {
-                    NavigationBarItem(
-                        selected = selectedPage == PAGE_CHATS,
-                        onClick = {
-                            selectMainPage(
-                                page = PAGE_CHATS,
-                                widthClass = widthClass,
-                                scope = scope,
-                                pagerState = pagerState,
-                                settingsDetailNavController = settingsDetailNavController,
+                    visiblePages.forEach { pageId ->
+                        when (pageId) {
+                            PAGE_CHATS -> NavigationBarItem(
+                                selected = selectedPageId == PAGE_CHATS,
+                                onClick = {
+                                    selectMainPage(
+                                        page = PAGE_CHATS,
+                                        widthClass = widthClass,
+                                        visiblePages = visiblePages,
+                                        scope = scope,
+                                        pagerState = pagerState,
+                                        settingsDetailNavController = settingsDetailNavController,
+                                    )
+                                },
+                                label = { Text(chatsLabel) },
+                                icon = {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Chat,
+                                        contentDescription = null,
+                                    )
+                                },
                             )
-                        },
-                        label = { Text(chatsLabel) },
-                        icon = {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Chat,
-                                contentDescription = null,
+                            PAGE_CONTACTS -> NavigationBarItem(
+                                selected = selectedPageId == PAGE_CONTACTS,
+                                onClick = {
+                                    selectMainPage(
+                                        page = PAGE_CONTACTS,
+                                        widthClass = widthClass,
+                                        visiblePages = visiblePages,
+                                        scope = scope,
+                                        pagerState = pagerState,
+                                        settingsDetailNavController = settingsDetailNavController,
+                                    )
+                                },
+                                label = { Text(contactsLabel) },
+                                icon = {
+                                    Icon(Icons.Filled.Contacts, contentDescription = null)
+                                },
                             )
-                        },
-                    )
-                    NavigationBarItem(
-                        selected = selectedPage == PAGE_CONTACTS,
-                        onClick = {
-                            selectMainPage(
-                                page = PAGE_CONTACTS,
-                                widthClass = widthClass,
-                                scope = scope,
-                                pagerState = pagerState,
-                                settingsDetailNavController = settingsDetailNavController,
+                            PAGE_SETTINGS -> NavigationBarItem(
+                                selected = selectedPageId == PAGE_SETTINGS,
+                                onClick = {
+                                    selectMainPage(
+                                        page = PAGE_SETTINGS,
+                                        widthClass = widthClass,
+                                        visiblePages = visiblePages,
+                                        scope = scope,
+                                        pagerState = pagerState,
+                                        settingsDetailNavController = settingsDetailNavController,
+                                    )
+                                },
+                                label = { Text(settingsLabel) },
+                                icon = {
+                                    Icon(Icons.Filled.Settings, contentDescription = null)
+                                },
                             )
-                        },
-                        label = { Text(contactsLabel) },
-                        icon = {
-                            Icon(Icons.Filled.Contacts, contentDescription = null)
-                        },
-                    )
-                    NavigationBarItem(
-                        selected = selectedPage == PAGE_SETTINGS,
-                        onClick = {
-                            selectMainPage(
-                                page = PAGE_SETTINGS,
-                                widthClass = widthClass,
-                                scope = scope,
-                                pagerState = pagerState,
-                                settingsDetailNavController = settingsDetailNavController,
+                            PAGE_PROFILE -> NavigationBarItem(
+                                // Two-pane: Profile is a shortcut button — never selected;
+                                // Settings stays highlighted while own profile is open in the
+                                // detail pane.
+                                selected = widthClass == WindowWidthSizeClass.COMPACT &&
+                                    selectedPageId == PAGE_PROFILE,
+                                onClick = {
+                                    selectMainPage(
+                                        page = PAGE_PROFILE,
+                                        widthClass = widthClass,
+                                        visiblePages = visiblePages,
+                                        scope = scope,
+                                        pagerState = pagerState,
+                                        settingsDetailNavController = settingsDetailNavController,
+                                    )
+                                },
+                                label = { Text(profileLabel) },
+                                icon = {
+                                    Icon(Icons.Filled.Person, contentDescription = null)
+                                },
                             )
-                        },
-                        label = { Text(settingsLabel) },
-                        icon = {
-                            Icon(Icons.Filled.Settings, contentDescription = null)
-                        },
-                    )
-                    NavigationBarItem(
-                        // Two-pane: Profile is a shortcut button — never selected; Settings stays
-                        // highlighted while own profile is open in the detail pane.
-                        selected = widthClass == WindowWidthSizeClass.COMPACT &&
-                            selectedPage == PAGE_PROFILE,
-                        onClick = {
-                            selectMainPage(
-                                page = PAGE_PROFILE,
-                                widthClass = widthClass,
-                                scope = scope,
-                                pagerState = pagerState,
-                                settingsDetailNavController = settingsDetailNavController,
-                            )
-                        },
-                        label = { Text(profileLabel) },
-                        icon = {
-                            Icon(Icons.Filled.Person, contentDescription = null)
-                        },
-                    )
+                            else -> Unit
+                        }
+                    }
                 }
             }
         }

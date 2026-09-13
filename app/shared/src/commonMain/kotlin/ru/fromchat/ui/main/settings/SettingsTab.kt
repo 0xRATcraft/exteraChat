@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -48,6 +49,8 @@ import ru.fromchat.settings_category_appearance
 import ru.fromchat.settings_category_appearance_d
 import ru.fromchat.settings_category_devices
 import ru.fromchat.settings_category_devices_d
+import ru.fromchat.settings_category_exterachat
+import ru.fromchat.settings_category_exterachat_d
 import ru.fromchat.settings_category_notifications
 import ru.fromchat.settings_category_notifications_d
 import ru.fromchat.settings_hub_about_sub
@@ -124,6 +127,14 @@ fun SettingsTab() {
             }
 
             Category(Modifier.padding(top = 16.dp)) {
+                ListItem(
+                    headline = stringResource(Res.string.settings_category_exterachat),
+                    supportingText = stringResource(Res.string.settings_category_exterachat_d),
+                    onClick = { openDetail(SettingsRoutes.ExteraChatCorner) },
+                    leadingContent = { Icon(Icons.Filled.AutoAwesome, null) },
+                    divider = true
+                )
+
                 ListItem(
                     headline = stringResource(Res.string.settings_category_account),
                     supportingText = stringResource(Res.string.settings_category_account_d),

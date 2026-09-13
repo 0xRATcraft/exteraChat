@@ -380,6 +380,12 @@
     <string name="settings_category_security_d">Change password</string>
     <string name="settings_category_account">Account</string>
     <string name="settings_category_account_d">Log out or delete account</string>
+    <string name="settings_category_exterachat">exteraChat corner</string>
+    <string name="settings_category_exterachat_d">exteraChat client settings</string>
+    <string name="exterachat_hide_contacts">Hide Contacts</string>
+    <string name="exterachat_hide_contacts_d">Remove Contacts from the bottom bar</string>
+    <string name="exterachat_hide_profile">Hide Profile</string>
+    <string name="exterachat_hide_profile_d">Remove Profile from the bottom bar</string>
 
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notification_settings">Notification settings</string>

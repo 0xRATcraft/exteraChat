@@ -28,6 +28,8 @@ object Settings {
     private const val HTTPS_ENABLED_KEY = "https_enabled"
     private const val DEVICE_SESSIONS_CACHE_KEY = "device_sessions_cache_v1"
     private const val LAST_SERVER_INSTANCE_ID_KEY = "last_server_instance_id"
+    private const val HIDE_CONTACTS_KEY = "hide_contacts_from_bottom_bar"
+    private const val HIDE_PROFILE_KEY = "hide_profile_from_bottom_bar"
 
     private val settings = PlatformSettings()
     private val deviceSessionsJson = Json { ignoreUnknownKeys = true }
@@ -187,4 +189,14 @@ object Settings {
     var lastKnownServerInstanceId: String
         get() = runBlocking { settings.getString(LAST_SERVER_INSTANCE_ID_KEY, "") }
         set(value) = runIO { settings.putString(LAST_SERVER_INSTANCE_ID_KEY, value) }
+
+    /** Hides the Contacts tab from the bottom navigation bar. */
+    var hideContacts: Boolean
+        get() = runBlocking { settings.getBoolean(HIDE_CONTACTS_KEY, false) }
+        set(value) = runIO { settings.putBoolean(HIDE_CONTACTS_KEY, value) }
+
+    /** Hides the Profile tab from the bottom navigation bar. */
+    var hideProfile: Boolean
+        get() = runBlocking { settings.getBoolean(HIDE_PROFILE_KEY, false) }
+        set(value) = runIO { settings.putBoolean(HIDE_PROFILE_KEY, value) }
 }
