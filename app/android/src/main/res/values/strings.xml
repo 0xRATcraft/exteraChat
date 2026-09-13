@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">FromChat</string>
+    <string name="app_name" translatable="false">exteraChat</string>
     <string name="public_chat">Main chat</string>
     <string name="chat_preview_attachment">Attachment</string>
     <string name="chat_preview_image_emoji">📷</string>

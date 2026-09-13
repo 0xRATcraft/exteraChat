@@ -485,7 +485,7 @@ object MessageNotificationCoordinator {
             ?.takeIf { it.isNotBlank() }
             ?.let { return it }
         message.displayName?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-        return message.username.trim().ifBlank { "FromChat" }
+        return message.username.trim().ifBlank { "exteraChat" }
     }
 
     private suspend fun previewStrings(): ChatListPreviewStrings {

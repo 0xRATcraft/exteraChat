@@ -272,7 +272,7 @@ fun main(args: Array<String>) {
         // Matches Res.string.app_name / app_name_beta.
         System.setProperty(
             "apple.awt.application.name",
-            if (AppBuildInfo.isDebug) "FromChat Beta" else "FromChat",
+            if (AppBuildInfo.isDebug) "exteraChat Beta" else "exteraChat",
         )
         System.setProperty("apple.laf.useScreenMenuBar", "true")
         // Treat TrayIcon images as NSImage templates so the menu bar tints them for light/dark.
@@ -294,7 +294,7 @@ fun main(args: Array<String>) {
             System.setProperty("skiko.renderApi", "OPENGL")
         }
         setWindowsDesktopAppUserModelId(
-            if (AppBuildInfo.isDebug) "FromChat Beta" else "FromChat",
+            if (AppBuildInfo.isDebug) "exteraChat Beta" else "exteraChat",
         )
     }
     // Close-to-tray keeps the process + tray; no SMAppService / Login Items registration.

@@ -53,7 +53,7 @@ fun BrandTitle(modifier: Modifier = Modifier) {
     }
 
     Text(
-        text = "FromChat",
+        text = "exteraChat",
         modifier = modifier.wrapContentWidth(align = Alignment.Start),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

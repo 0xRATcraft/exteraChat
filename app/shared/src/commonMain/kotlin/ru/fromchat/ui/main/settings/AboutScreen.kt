@@ -37,6 +37,9 @@ import org.jetbrains.compose.resources.vectorResource
 import ru.fromchat.AppBuildInfo
 import ru.fromchat.Res
 import ru.fromchat.about
+import ru.fromchat.about_link_extg_github
+import ru.fromchat.about_link_extg_telegram
+import ru.fromchat.about_link_github
 import ru.fromchat.about_link_max
 import ru.fromchat.about_link_privacy
 import ru.fromchat.about_link_telegram
@@ -52,6 +55,8 @@ import ru.fromchat.ui.components.BrandTitle
 private const val URL_TELEGRAM = "https://t.me/fromchat_ch"
 private const val URL_MAX = "https://maxgate.io/fromchat_ch"
 private const val URL_WEBSITE = "https://fromchat.ru"
+private const val URL_EXTG_TELEGRAM = "https://t.me/exteraChatCh"
+private const val URL_EXTG_GITHUB = "https://github.com/0xRATcraft/exteraChat"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +126,27 @@ fun AboutScreen() {
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Category(Modifier.padding(top = 16.dp)) {
+                ListItem(
+                    headline = stringResource(Res.string.about_link_extg_telegram),
+                    supportingText = URL_EXTG_TELEGRAM,
+                    onClick = { uriHandler.openUri(URL_EXTG_TELEGRAM) },
+                    divider = true,
+                    leadingContent = {
+                        Icon(vectorResource(Res.drawable.about_link_telegram), null)
+                    }
+                )
+
+                ListItem(
+                    headline = stringResource(Res.string.about_link_extg_github),
+                    supportingText = URL_EXTG_GITHUB,
+                    onClick = { uriHandler.openUri(URL_EXTG_GITHUB) },
+                    leadingContent = {
+                        Icon(vectorResource(Res.drawable.about_link_github), null)
+                    }
                 )
             }
 

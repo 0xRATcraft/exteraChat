@@ -16,7 +16,7 @@ internal object PublicChatNotificationAvatar {
     private const val SIZE_PX = 192
 
     fun create(title: String): Bitmap {
-        val seed = title.ifBlank { "FromChat" }
+        val seed = title.ifBlank { "exteraChat" }
         val hash = seed.hashCode()
         val r = abs(hash % 256)
         val g = abs((hash / 256) % 256)

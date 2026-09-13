@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- App -->
-    <string name="app_name">FromChat</string>
-    <string name="app_name_beta">FromChat Beta</string>
+    <string name="app_name">exteraChat</string>
+    <string name="app_name_beta">exteraChat Beta</string>
 
     <!-- Navigation -->
     <string name="back">Back</string>
@@ -11,6 +11,8 @@
     <string name="about">About</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_link_telegram">Telegram</string>
+    <string name="about_link_extg_telegram">exteraChat Telegram</string>
+    <string name="about_link_extg_github">exteraChat GitHub</string>
     <string name="about_link_max">MAX</string>
     <string name="about_link_website">Website</string>
     <string name="about_link_privacy">Privacy policy</string>
@@ -21,15 +23,15 @@
     <string name="legal_document_load_error">Couldn\'t load the document. Check your connection and try again.</string>
     <string name="auth_legal_notice_prefix">By creating an account you agree to the </string>
     <string name="auth_legal_notice_and"> and </string>
-    <string name="app_desc">100% free and open messenger. Supports self-hosted installation on your own server.</string>
+    <string name="app_desc">100% free and open-source client for the FromChat messenger.</string>
 
     <!-- Desktop menu / tray -->
     <string name="desktop_menu_file">File</string>
     <string name="desktop_menu_edit">Edit</string>
     <string name="desktop_menu_window">Window</string>
-    <string name="desktop_about_app">About FromChat</string>
+    <string name="desktop_about_app">About exteraChat</string>
     <string name="desktop_tray_show">Show</string>
-    <string name="desktop_show_app">Show FromChat</string>
+    <string name="desktop_show_app">Show exteraChat</string>
     <string name="desktop_quit">Quit</string>
     <string name="desktop_new_chat">New Chat</string>
     <string name="desktop_search_conversations">Search Conversations</string>
@@ -39,7 +41,7 @@
     <string name="desktop_minimize">Minimize</string>
     <string name="desktop_zoom">Zoom</string>
     <string name="desktop_database_locked_title">Database locked</string>
-    <string name="desktop_database_locked_message">FromChat cannot access its database because another process is using it.</string>
+    <string name="desktop_database_locked_message">exteraChat cannot access its database because another process is using it.</string>
     <string name="desktop_database_locked_kill">End process</string>
     <string name="desktop_database_locked_waiting">Waiting for the database to become available…</string>
     <string name="desktop_database_locked_unknown_process">Unknown process</string>
@@ -64,8 +66,8 @@
     <string name="username_chars_error">Username can only contain English letters, numbers, hyphens and underscores</string>
     <string name="password_length_error">Password must be 5 to 50 characters</string>
     <string name="passwords_dont_match">The two passwords don’t match</string>
-    <string name="auth_welcome_title">Welcome to FromChat</string>
-    <string name="auth_welcome_tagline">The 100% free and open source messenger.</string>
+    <string name="auth_welcome_title">Welcome to exteraChat</string>
+    <string name="auth_welcome_tagline">The 100% free and open-source client for the FromChat messenger.</string>
     <string name="auth_get_started">Get started</string>
     <string name="auth_server_connect_failed">Failed to connect to the server</string>
     <string name="auth_wrong_password">Wrong password</string>

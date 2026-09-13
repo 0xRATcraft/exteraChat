@@ -3,7 +3,7 @@
 include(":utils:android")
 
 
-rootProject.name = "FromChat"
+rootProject.name = "exteraChat"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

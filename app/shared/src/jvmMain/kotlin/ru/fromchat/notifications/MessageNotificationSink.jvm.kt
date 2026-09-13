@@ -31,7 +31,7 @@ internal actual object MessageNotificationSink {
         val title: String
         val subtitle: String
         if (notification.isDirectMessage) {
-            title = notification.senderName.ifBlank { "FromChat" }
+            title = notification.senderName.ifBlank { "exteraChat" }
             subtitle = ""
         } else {
             title = getString(Res.string.public_chat)

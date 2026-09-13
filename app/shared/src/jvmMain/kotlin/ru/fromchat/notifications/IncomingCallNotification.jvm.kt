@@ -11,7 +11,7 @@ import ru.fromchat.ui.calls.notifyIncomingCall
 internal actual fun notifyIncomingCallIfBackground(callerDisplayName: String) {
     if (!DesktopNotificationSettings.enabled) return
     if (DesktopAppVisibility.isWindowVisible) return
-    val title = callerDisplayName.trim().ifBlank { "FromChat" }
+    val title = callerDisplayName.trim().ifBlank { "exteraChat" }
     val body = runBlocking { getString(Res.string.call_incoming_subtitle) }
     notifyIncomingCall(title, body)
 }

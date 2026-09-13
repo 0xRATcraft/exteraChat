@@ -73,7 +73,7 @@ internal actual object MessageNotificationSink {
         } else {
             GROUP_PUBLIC
         }
-        val senderName = notification.senderName.ifBlank { "FromChat" }
+        val senderName = notification.senderName.ifBlank { "exteraChat" }
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(NotificationSmallIcon.resId(context))
             .setContentTitle(
@@ -82,7 +82,7 @@ internal actual object MessageNotificationSink {
             .setContentText(notification.body)
             .setGroup(groupKey)
             .setStyle(
-                NotificationCompat.MessagingStyle(Person.Builder().setName("FromChat").build())
+                NotificationCompat.MessagingStyle(Person.Builder().setName("exteraChat").build())
                     .setConversationTitle(conversationTitle)
                     .setGroupConversation(true)
                     .addMessage(
@@ -147,7 +147,7 @@ private fun createChannel(context: Context) {
     (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
         .createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_DEFAULT)
-                .apply { description = "FromChat message notifications" }
+                .apply { description = "exteraChat message notifications" }
         )
 }
 

@@ -49,7 +49,7 @@ object DesktopNotifier {
         launchTarget: NotificationLaunchTarget? = null,
     ) {
         val payload = DesktopNotificationPayload(
-            title = title.trim().ifEmpty { "FromChat" },
+            title = title.trim().ifEmpty { "exteraChat" },
             body = body.trim(),
             subtitle = subtitle.trim(),
             launchTarget = launchTarget,

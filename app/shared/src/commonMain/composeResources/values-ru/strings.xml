@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FromChat</string>
-    <string name="app_name_beta">FromChat Beta</string>
+    <string name="app_name">exteraChat</string>
+    <string name="app_name_beta">exteraChat Beta</string>
     <string name="back">Назад</string>
     <string name="settings">Настройки</string>
     <string name="home">Главная</string>
     <string name="about">О приложении</string>
     <string name="about_version">Версия %1$s</string>
     <string name="about_link_telegram">Telegram</string>
+    <string name="about_link_extg_telegram">exteraChat Telegram</string>
+    <string name="about_link_extg_github">exteraChat GitHub</string>
     <string name="about_link_max">MAX</string>
     <string name="about_link_website">Сайт</string>
     <string name="about_link_privacy">Политика конфиденциальности</string>
@@ -18,13 +20,13 @@
     <string name="legal_document_load_error">Не удалось загрузить документ. Проверьте подключение к интернету и попробуйте снова.</string>
     <string name="auth_legal_notice_prefix">Регистрируясь, вы соглашаетесь с </string>
     <string name="auth_legal_notice_and"> и </string>
-    <string name="app_desc">100% бесплатный и открытый мессенджер. Поддерживает self-hosted установку на своём сервере.</string>
+    <string name="app_desc">100% бесплатный и открытый клиент на мессенджер FromChat.</string>
     <string name="desktop_menu_file">Файл</string>
     <string name="desktop_menu_edit">Правка</string>
     <string name="desktop_menu_window">Окно</string>
-    <string name="desktop_about_app">О FromChat</string>
+    <string name="desktop_about_app">О exteraChat</string>
     <string name="desktop_tray_show">Показать</string>
-    <string name="desktop_show_app">Показать FromChat</string>
+    <string name="desktop_show_app">Показать exteraChat</string>
     <string name="desktop_quit">Выйти</string>
     <string name="desktop_new_chat">Новый чат</string>
     <string name="desktop_search_conversations">Поиск чатов</string>
@@ -34,7 +36,7 @@
     <string name="desktop_minimize">Свернуть</string>
     <string name="desktop_zoom">Масштабировать</string>
     <string name="desktop_database_locked_title">База данных заблокирована</string>
-    <string name="desktop_database_locked_message">FromChat не может получить доступ к базе данных — её использует другой процесс.</string>
+    <string name="desktop_database_locked_message">exteraChat не может получить доступ к базе данных — её использует другой процесс.</string>
     <string name="desktop_database_locked_kill">Завершить процесс</string>
     <string name="desktop_database_locked_waiting">Ожидание освобождения базы данных…</string>
     <string name="desktop_database_locked_unknown_process">Неизвестный процесс</string>
@@ -55,8 +57,8 @@
     <string name="username_chars_error">Имя пользователя может содержать только английские буквы, цифры, дефисы и подчеркивания</string>
     <string name="password_length_error">Пароль — от 5 до 50 символов</string>
     <string name="passwords_dont_match">Пароли не совпадают</string>
-    <string name="auth_welcome_title">Добро пожаловать в FromChat</string>
-    <string name="auth_welcome_tagline">100% бесплатный мессенджер с открытым исходным кодом.</string>
+    <string name="auth_welcome_title">Добро пожаловать в exteraChat</string>
+    <string name="auth_welcome_tagline">100% бесплатный клиент мессенджера FromChat с открытым исходным кодом.</string>
     <string name="auth_get_started">Начать</string>
     <string name="auth_server_connect_failed">Не удалось подключиться к серверу</string>
     <string name="auth_wrong_password">Неверный пароль</string>
@@ -348,7 +350,7 @@
     <string name="settings_category_account_d">Выйти или удалить аккаунт</string>
 
     <string name="settings_notifications_title">Уведомления</string>
-    <string name="settings_notifications_body">Чтобы разрешить или отключить уведомления FromChat, откройте настройки уведомлений телефона.</string>
+    <string name="settings_notifications_body">Чтобы разрешить или отключить уведомления exteraChat, откройте настройки уведомлений телефона.</string>
     <string name="settings_notification_settings">Настройки уведомлений</string>
     <string name="settings_notification_settings_d">Здесь вы можете включить или выключить типы уведомлений, изменить звук и т.д.</string>
     <string name="settings_notifications_permission_required">Откройте системные настройки и разрешите уведомления.</string>
