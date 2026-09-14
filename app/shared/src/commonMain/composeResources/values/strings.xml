@@ -386,6 +386,8 @@
     <string name="exterachat_hide_contacts_d">Remove Contacts from the bottom bar</string>
     <string name="exterachat_hide_profile">Hide Profile</string>
     <string name="exterachat_hide_profile_d">Remove Profile from the bottom bar</string>
+    <string name="exterachat_chat_title">Chat title</string>
+    <string name="exterachat_chat_title_d">Title shown above the chats list, up to 8 characters</string>
 
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notification_settings">Notification settings</string>

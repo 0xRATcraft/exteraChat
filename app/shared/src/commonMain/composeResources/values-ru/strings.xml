@@ -354,6 +354,8 @@
     <string name="exterachat_hide_contacts_d">Убрать «Контакты» из нижней панели</string>
     <string name="exterachat_hide_profile">Скрыть Профиль</string>
     <string name="exterachat_hide_profile_d">Убрать «Профиль» из нижней панели</string>
+    <string name="exterachat_chat_title">Заголовок в чатах</string>
+    <string name="exterachat_chat_title_d">Название в шапке списка чатов, до 8 символов</string>
 
     <string name="settings_notifications_title">Уведомления</string>
     <string name="settings_notifications_body">Чтобы разрешить или отключить уведомления exteraChat, откройте настройки уведомлений телефона.</string>

@@ -12,12 +12,15 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import com.pr0gramm3r101.components.Category
@@ -30,8 +33,11 @@ import ru.fromchat.exterachat_hide_contacts
 import ru.fromchat.exterachat_hide_contacts_d
 import ru.fromchat.exterachat_hide_profile
 import ru.fromchat.exterachat_hide_profile_d
+import ru.fromchat.exterachat_chat_title
+import ru.fromchat.exterachat_chat_title_d
 import ru.fromchat.settings_category_exterachat
 import ru.fromchat.ui.components.Text
+import ru.fromchat.ui.components.SettingsPasswordOutlineFieldShape
 
 /**
  * Reactive mirrors of [Settings.hideContacts] / [Settings.hideProfile] so the main bottom
@@ -40,6 +46,7 @@ import ru.fromchat.ui.components.Text
  */
 var hideContactsUiState by mutableStateOf(runCatching { Settings.hideContacts }.getOrDefault(false))
 var hideProfileUiState by mutableStateOf(runCatching { Settings.hideProfile }.getOrDefault(false))
+var chatTitleUiState by mutableStateOf(runCatching { Settings.chatTitle }.getOrDefault(Settings.DEFAULT_CHAT_TITLE))
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -66,6 +73,34 @@ fun ExteraChatCornerScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(innerPadding)
         ) {
+            Category(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                OutlinedTextField(
+                    value = chatTitleUiState,
+                    onValueChange = { newValue ->
+                        if (newValue.length <= Settings.MAX_CHAT_TITLE_LENGTH) {
+                            chatTitleUiState = newValue
+                            Settings.chatTitle = newValue
+                        }
+                    },
+                    label = { Text(stringResource(Res.string.exterachat_chat_title)) },
+                    supportingText = { Text(stringResource(Res.string.exterachat_chat_title_d)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    singleLine = true,
+                    shape = SettingsPasswordOutlineFieldShape,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                    ),
+                )
+            }
             Category(
                 Modifier.padding(top = 16.dp),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.pr0gramm3r101.utils.toPx
 import org.jetbrains.compose.resources.Font
 import ru.fromchat.Res
+import ru.fromchat.config.Settings.DEFAULT_CHAT_TITLE
 import ru.fromchat.montserrat_cyrillic
 import ru.fromchat.montserrat_cyrillic_ext
 import ru.fromchat.montserrat_latin
@@ -41,7 +42,7 @@ val titleGradientStops = arrayOf(
 )
 
 @Composable
-fun BrandTitle(modifier: Modifier = Modifier) {
+fun BrandTitle(modifier: Modifier = Modifier, title: String = DEFAULT_CHAT_TITLE) {
     val density = LocalDensity.current
     var drawnTextWidth by remember { mutableFloatStateOf(0f) }
     val brush = remember(drawnTextWidth) {
@@ -53,7 +54,7 @@ fun BrandTitle(modifier: Modifier = Modifier) {
     }
 
     Text(
-        text = "exteraChat",
+        text = title,
         modifier = modifier.wrapContentWidth(align = Alignment.Start),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

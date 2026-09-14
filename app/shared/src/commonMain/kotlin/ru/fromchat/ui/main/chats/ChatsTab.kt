@@ -149,6 +149,7 @@ import ru.fromchat.ui.chat.panels.publicchat.navigateToPublicChat
 import ru.fromchat.ui.chat.utils.PendingChatAttachmentDrops
 import ru.fromchat.ui.components.BackHandler
 import ru.fromchat.ui.components.BrandTitle
+import ru.fromchat.ui.main.settings.chatTitleUiState
 import ru.fromchat.ui.components.ConnectingEllipsis
 import ru.fromchat.ui.components.PredictiveBackHandler
 import ru.fromchat.ui.components.SuspendedAccountSupportSheet
@@ -375,6 +376,7 @@ private fun ChatsTopBarHazeBackdrop(
 private fun ChatsNormalTopBar(
     blurReveal: Float,
     titleKey: String,
+    chatTitle: String,
     connectingTitle: String,
     updatingTitle: String,
     searchCollapseProgress: Float,
@@ -442,7 +444,7 @@ private fun ChatsNormalTopBar(
                                 }
                             }
 
-                            else -> BrandTitle()
+                            else -> BrandTitle(title = chatTitle)
                         }
                     }
                 }
@@ -1113,6 +1115,7 @@ fun ChatsTab(
                     ChatsNormalTopBar(
                         blurReveal = topBarBlurReveal,
                         titleKey = titleKey,
+                        chatTitle = chatTitleUiState,
                         connectingTitle = connectingTitle,
                         updatingTitle = updatingTitle,
                         searchCollapseProgress = topBarSearchReveal,

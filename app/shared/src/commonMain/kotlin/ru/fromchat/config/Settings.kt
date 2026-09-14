@@ -30,6 +30,13 @@ object Settings {
     private const val LAST_SERVER_INSTANCE_ID_KEY = "last_server_instance_id"
     private const val HIDE_CONTACTS_KEY = "hide_contacts_from_bottom_bar"
     private const val HIDE_PROFILE_KEY = "hide_profile_from_bottom_bar"
+    private const val CHAT_TITLE_KEY = "chat_title"
+
+    /** Default title shown in the chats header when the user hasn't customized it. */
+    const val DEFAULT_CHAT_TITLE = "exteraChat"
+
+    /** Maximum allowed length for the custom chats header title. */
+    const val MAX_CHAT_TITLE_LENGTH = 8
 
     private val settings = PlatformSettings()
     private val deviceSessionsJson = Json { ignoreUnknownKeys = true }
@@ -199,4 +206,11 @@ object Settings {
     var hideProfile: Boolean
         get() = runBlocking { settings.getBoolean(HIDE_PROFILE_KEY, false) }
         set(value) = runIO { settings.putBoolean(HIDE_PROFILE_KEY, value) }
+
+    /** Custom title shown in the chats header. Falls back to [DEFAULT_CHAT_TITLE]. */
+    var chatTitle: String
+        get() = runBlocking {
+            settings.getString(CHAT_TITLE_KEY, DEFAULT_CHAT_TITLE).ifBlank { DEFAULT_CHAT_TITLE }
+        }
+        set(value) = runIO { settings.putString(CHAT_TITLE_KEY, value.take(MAX_CHAT_TITLE_LENGTH)) }
 }
