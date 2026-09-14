@@ -13,6 +13,7 @@ import ru.fromchat.config.Settings.API_PORT_KEY
 import ru.fromchat.config.Settings.SERVER_IP_KEY
 import ru.fromchat.ui.Theme
 import com.pr0gramm3r101.utils.settings.Settings as PlatformSettings
+import com.pr0gramm3r101.utils.settings.secureSettings
 
 object Settings {
     private const val MATERIAL_YOU_KEY = "materialYou"
@@ -32,12 +33,18 @@ object Settings {
     private const val HIDE_PROFILE_KEY = "hide_profile_from_bottom_bar"
     private const val CHAT_TITLE_KEY = "chat_title"
     private const val SHOW_PROFILE_ID_KEY = "show_profile_id"
+    private const val ENCRYPTION_ENABLED_KEY = "encryption_enabled"
+    private const val ENCRYPTION_KEY_PREF = "encryption_key"
+    private const val ENCRYPTION_LOCK_KEY = "encryption_lock"
 
     /** Default title shown in the chats header when the user hasn't customized it. */
     const val DEFAULT_CHAT_TITLE = "exteraChat"
 
     /** Maximum allowed length for the custom chats header title. */
     const val MAX_CHAT_TITLE_LENGTH = 8
+
+    /** Minimum accepted length of the message-encryption key. */
+    const val MIN_ENCRYPTION_KEY_LENGTH = 4
 
     private val settings = PlatformSettings()
     private val deviceSessionsJson = Json { ignoreUnknownKeys = true }
@@ -219,4 +226,23 @@ object Settings {
     var showProfileId: Boolean
         get() = runBlocking { settings.getBoolean(SHOW_PROFILE_ID_KEY, false) }
         set(value) = runIO { settings.putBoolean(SHOW_PROFILE_ID_KEY, value) }
+
+    /** Master toggle for exteracrypt message encryption. */
+    var encryptionEnabled: Boolean
+        get() = runBlocking { settings.getBoolean(ENCRYPTION_ENABLED_KEY, false) }
+        set(value) = runIO { settings.putBoolean(ENCRYPTION_ENABLED_KEY, value) }
+
+    /** Shared secret used to derive the AES key; stored in platform-secure storage. */
+    fun getEncryptionKey(): String = runBlocking { secureSettings.getString(ENCRYPTION_KEY_PREF, "") }
+
+    fun setEncryptionKey(value: String) {
+        runIO { secureSettings.putString(ENCRYPTION_KEY_PREF, value.trim()) }
+    }
+
+    fun hasUsableEncryptionKey(): Boolean = getEncryptionKey().trim().length >= MIN_ENCRYPTION_KEY_LENGTH
+
+    /** Persisted state of the composer lock button (survives chat navigation and app restarts). */
+    var encryptionLock: Boolean
+        get() = runBlocking { settings.getBoolean(ENCRYPTION_LOCK_KEY, false) }
+        set(value) = runIO { settings.putBoolean(ENCRYPTION_LOCK_KEY, value) }
 }

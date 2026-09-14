@@ -1096,6 +1096,7 @@ fun MessageItem(
                                                 )
                                             }
                                         }
+                                        val renderedText = rememberDecryptedMessageContent(message.content)
                                         if (
                                             message.content.isNotBlank() &&
                                             !isCorrupted &&
@@ -1138,7 +1139,7 @@ fun MessageItem(
                                                             ),
                                                         ) {
                                                             Text(
-                                                                text = message.content,
+                                                                text = renderedText,
                                                                 style = MaterialTheme.typography.bodyLarge,
                                                                 color = contentColor,
                                                                 modifier = selectableTextModifier,
@@ -1151,7 +1152,7 @@ fun MessageItem(
                                                 // mouse/trackpad hovers the caption; selection stays
                                                 // off so long-press keeps opening the message menu.
                                                 Text(
-                                                    text = message.content,
+                                                    text = renderedText,
                                                     style = MaterialTheme.typography.bodyLarge,
                                                     color = contentColor,
                                                     modifier = selectableTextModifier,

@@ -104,6 +104,8 @@ import org.jetbrains.compose.resources.stringResource
 import ru.fromchat.Logger
 import ru.fromchat.AppForeground
 import ru.fromchat.supportsMouseMessageInteraction
+import ru.fromchat.config.Settings
+import ru.fromchat.api.crypto.exteracrypt.ExteraCrypt
 import ru.fromchat.ui.main.ConversationDetailContentPadding
 import ru.fromchat.ui.main.LocalConversationListDetailActive
 import ru.fromchat.ui.main.detailPaneShowBackButton
@@ -551,6 +553,7 @@ fun ChatScreen(
 
     // UI state
     var inputText by rememberSaveable { mutableStateOf("") }
+    var encryptionLockOn by rememberSaveable { mutableStateOf(Settings.encryptionLock) }
     var replyTo by rememberSaveable { mutableStateOf<Message?>(null) }
     var editingMessage by rememberSaveable { mutableStateOf<Message?>(null) }
     var contextMenuState by remember {
@@ -564,6 +567,13 @@ fun ChatScreen(
     }
     var expandedImage by remember { mutableStateOf<Pair<Message, Int>?>(null) }
     var isImageClosing by remember { mutableStateOf(false) }
+    val encryptionActive = remember { Settings.encryptionEnabled && Settings.hasUsableEncryptionKey() }
+    LaunchedEffect(encryptionLockOn) {
+        Settings.encryptionLock = encryptionLockOn
+    }
+    LaunchedEffect(encryptionActive) {
+        if (!encryptionActive) encryptionLockOn = false
+    }
     val imageThumbBounds = remember { mutableStateMapOf<String, Rect>() }
     val expandedImageKey = expandedImage?.let { (msg, idx) ->
         val cid = msg.client_message_id?.trim().orEmpty()
@@ -931,18 +941,29 @@ fun ChatScreen(
                         currentUserId = currentUserId,
                         attachmentDropBridge = attachmentDropBridge,
                         pendingDropUris = pendingDropUris,
+                        encryptionLockOn = encryptionLockOn,
+                        encryptionLockAvailable = encryptionActive && !isReadOnly,
+                        onEncryptionLockToggle = { encryptionLockOn = !encryptionLockOn },
                         onSend = { text, attachments ->
+                            val sendingEncrypted = encryptionLockOn && encryptionActive
                             if (editingMessage != null) {
                                 scope.launch {
-                                    panel.handleEditMessage(editingMessage!!.id, text)
+                                    val editContent = if (sendingEncrypted) {
+                                        encryptOutgoing(text)
+                                    } else {
+                                        text
+                                    }
+                                    panel.handleEditMessage(editingMessage!!.id, editContent)
                                     editingMessage = null
                                 }
                             } else {
                                 scope.launch {
                                     val replyToId = replyTo?.id?.takeIf { it > 0 }
                                     val recipientId = panel.getRecipientId()
+                                    val sentContent = if (sendingEncrypted) encryptOutgoing(text) else text
+                                    val displayContent = if (sendingEncrypted && sentContent.isNotBlank()) "🔒 $text" else text
                                     if (attachments.isNotEmpty() && panel.supportsAttachments) {
-                                        val plaintext = text.ifBlank { "" }
+                                        val plaintext = sentContent.ifBlank { "" }
                                         attachments.forEach { att ->
                                             val jobId = generateClientMessageId()
                                             val tempId = optimisticMessageIdForClientMessageId(jobId)
@@ -1014,7 +1035,7 @@ fun ChatScreen(
                                                 val optimisticMessage = Message(
                                                     id = tempId,
                                                     user_id = currentUserId ?: -1,
-                                                    content = plaintext,
+                                                    content = displayContent,
                                                     timestamp = nowMessageTimestampIso(),
                                                     is_read = false,
                                                     is_edited = false,
@@ -1050,7 +1071,7 @@ fun ChatScreen(
                                                         percent = 1,
                                                         filename = att.filename,
                                                     ),
-                                                    messageLabel = plaintext,
+                                                    messageLabel = displayContent,
                                                 )
                                                 if (recipientId != null) {
                                                     AttachmentMediaLog.send(
@@ -1095,7 +1116,12 @@ fun ChatScreen(
                                             }
                                         }
                                     } else if (text.isNotBlank()) {
-                                        panel.sendMessageWithImmediateDisplay(text, replyToId, replyTo)
+                                        panel.sendMessageWithImmediateDisplay(
+                                            displayContent,
+                                            replyToId,
+                                            replyTo,
+                                            networkContent = sentContent.ifBlank { text },
+                                        )
                                     }
                                     replyTo = null
                                     haptic(HapticFeedbackEvent.MessageSent)
@@ -1537,7 +1563,7 @@ fun ChatScreen(
                         },
                         onEdit = { message ->
                             editingMessage = message
-                            inputText = if (message.isContentCorrupted) "" else message.content
+                            inputText = if (message.isContentCorrupted) "" else syncDecryptedText(message.content)
                             replyTo = null
                         },
                         onDelete = { message ->
@@ -1547,7 +1573,7 @@ fun ChatScreen(
                         },
                         onCopy = { message ->
                             if (message.isContentCorrupted) return@MessageContextMenu
-                            val text = message.content.trim()
+                            val text = syncDecryptedText(message.content).trim()
                             if (text.isNotEmpty()) {
                                 scope.launch { clipboard.setText(text) }
                             }
@@ -1779,4 +1805,12 @@ private suspend fun LazyListState.scrollChatMessageToCenter(
     val targetCenterY = (visibleTop + visibleBottom) / 2f
     val scrollOffset = (targetCenterY + itemHeight / 2f - viewportHeight).roundToInt()
     animateScrollToItem(lazyIndex, scrollOffset)
+}
+
+private suspend fun encryptOutgoing(text: String): String {
+    if (text.isBlank()) return ""
+    return ExteraCrypt.encrypt(
+        plaintext = text,
+        userKey = Settings.getEncryptionKey(),
+    )
 }

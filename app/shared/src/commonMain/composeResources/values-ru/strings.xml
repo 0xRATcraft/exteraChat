@@ -195,6 +195,7 @@
     <string name="cd_pick_file">Выбрать файл</string>
     <string name="cd_send">Отправить</string>
     <string name="cd_emoji">Эмодзи</string>
+    <string name="cd_encryption_lock">Переключить шифрование сообщения</string>
     <string name="profile_title">Профиль</string>
     <string name="profile_edit_title">Изменить</string>
     <string name="profile_edit_saved">Профиль обновлён</string>
@@ -360,6 +361,11 @@
     <string name="exterachat_chat_title_d">Название в шапке списка чатов, до 8 символов</string>
     <string name="exterachat_show_profile_id">Показывать ID</string>
     <string name="exterachat_show_profile_id_d">Показывать блок с ID в профилях после «О себе»</string>
+
+    <string name="exteracrypt_enabled">Шифрование сообщений</string>
+    <string name="exteracrypt_enabled_d">Шифрует исходящие сообщения (AES-256-GCM). Обе стороны используют один ключ.</string>
+    <string name="exteracrypt_key_label">Ключ шифрования</string>
+    <string name="exteracrypt_key_d">От 4 символов. Введите один и тот же ключ у собеседников.</string>
 
     <string name="settings_notifications_title">Уведомления</string>
     <string name="settings_notifications_body">Чтобы разрешить или отключить уведомления exteraChat, откройте настройки уведомлений телефона.</string>

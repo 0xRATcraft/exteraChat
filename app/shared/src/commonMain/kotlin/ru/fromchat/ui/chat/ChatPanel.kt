@@ -685,6 +685,7 @@ abstract class ChatPanel(
         content: String,
         replyToId: Int?,
         replyTo: Message? = null,
+        networkContent: String? = null,
     ) {
         if (content.isBlank()) return
 
@@ -748,7 +749,7 @@ abstract class ChatPanel(
                     "after_rate_limit tempId=${tempId.take(8)} " +
                         "waitedMs=${kotlin.time.Clock.System.now().toEpochMilliseconds() - rateT0}",
                 )
-                sendMessage(content, replyToId, tempId)
+                sendMessage(networkContent?.trim() ?: content.trim(), replyToId, tempId)
             } catch (_: Exception) {
                 removeMessageByClientMessageId(tempId)
                 pendingMessages.remove(tempId)

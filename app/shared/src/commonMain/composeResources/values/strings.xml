@@ -213,6 +213,7 @@
     <string name="cd_pick_file">Choose file</string>
     <string name="cd_send">Send</string>
     <string name="cd_emoji">Emoji</string>
+    <string name="cd_encryption_lock">Toggle message encryption</string>
 
     <!-- Profile -->
     <string name="profile_title">Profile</string>
@@ -392,6 +393,11 @@
     <string name="exterachat_chat_title_d">Title shown above the chats list, up to 8 characters</string>
     <string name="exterachat_show_profile_id">Show User ID</string>
     <string name="exterachat_show_profile_id_d">Show a copyable ID block in profiles after About</string>
+
+    <string name="exteracrypt_enabled">Message encryption</string>
+    <string name="exteracrypt_enabled_d">Encrypt outgoing messages (AES-256-GCM). Both sides use the same key.</string>
+    <string name="exteracrypt_key_label">Encryption key</string>
+    <string name="exteracrypt_key_d">At least 4 characters. Enter the same key on both sides.</string>
 
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notification_settings">Notification settings</string>

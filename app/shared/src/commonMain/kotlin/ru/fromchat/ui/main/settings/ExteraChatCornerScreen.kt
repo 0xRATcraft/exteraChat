@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,10 @@ import ru.fromchat.exterachat_chat_title
 import ru.fromchat.exterachat_chat_title_d
 import ru.fromchat.exterachat_show_profile_id
 import ru.fromchat.exterachat_show_profile_id_d
+import ru.fromchat.exteracrypt_enabled
+import ru.fromchat.exteracrypt_enabled_d
+import ru.fromchat.exteracrypt_key_label
+import ru.fromchat.exteracrypt_key_d
 import ru.fromchat.settings_category_exterachat
 import ru.fromchat.ui.components.Text
 import ru.fromchat.ui.components.SettingsPasswordOutlineFieldShape
@@ -51,6 +56,8 @@ var hideContactsUiState by mutableStateOf(runCatching { Settings.hideContacts }.
 var hideProfileUiState by mutableStateOf(runCatching { Settings.hideProfile }.getOrDefault(false))
 var chatTitleUiState by mutableStateOf(runCatching { Settings.chatTitle }.getOrDefault(Settings.DEFAULT_CHAT_TITLE))
 var showProfileIdUiState by mutableStateOf(runCatching { Settings.showProfileId }.getOrDefault(false))
+var encryptionEnabledUiState by mutableStateOf(runCatching { Settings.encryptionEnabled }.getOrDefault(false))
+var encryptionKeyUiState by mutableStateOf(runCatching { Settings.getEncryptionKey() }.getOrDefault(""))
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -146,6 +153,46 @@ fun ExteraChatCornerScreen(onBack: () -> Unit) {
                     leadingContent = {
                         Icon(Icons.Filled.Tag, null)
                     }
+                )
+            }
+            Category(
+                Modifier.padding(top = 16.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                SwitchListItem(
+                    headline = stringResource(Res.string.exteracrypt_enabled),
+                    supportingText = stringResource(Res.string.exteracrypt_enabled_d),
+                    checked = encryptionEnabledUiState,
+                    onCheckedChange = {
+                        encryptionEnabledUiState = it
+                        Settings.encryptionEnabled = it
+                    },
+                    divider = true,
+                    leadingContent = {
+                        Icon(Icons.Filled.Lock, null)
+                    }
+                )
+                OutlinedTextField(
+                    value = encryptionKeyUiState,
+                    onValueChange = { newValue ->
+                        encryptionKeyUiState = newValue
+                        Settings.setEncryptionKey(newValue)
+                    },
+                    label = { Text(stringResource(Res.string.exteracrypt_key_label)) },
+                    supportingText = { Text(stringResource(Res.string.exteracrypt_key_d)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    singleLine = true,
+                    shape = SettingsPasswordOutlineFieldShape,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                    ),
                 )
             }
         }

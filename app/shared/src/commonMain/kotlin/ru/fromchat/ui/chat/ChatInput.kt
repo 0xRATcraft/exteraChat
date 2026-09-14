@@ -49,6 +49,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.SentimentSatisfied
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,6 +106,7 @@ import ru.fromchat.api.schema.messages.Message
 import ru.fromchat.chat_drop_attachment_hint
 import ru.fromchat.cd_close
 import ru.fromchat.cd_emoji
+import ru.fromchat.cd_encryption_lock
 import ru.fromchat.cd_pick_file
 import ru.fromchat.cd_pick_image
 import ru.fromchat.cd_remove
@@ -322,6 +325,9 @@ fun ChatInput(
     hazeBlurEnabled: Boolean = true,
     attachmentDropBridge: AttachmentDropBridge,
     pendingDropUris: List<String> = emptyList(),
+    encryptionLockOn: Boolean = false,
+    encryptionLockAvailable: Boolean = true,
+    onEncryptionLockToggle: () -> Unit = {},
 ) {
     val composerHazeStyle = rememberChatSurfaceContainerHazeStyle().then { blurEnabled(hazeBlurEnabled) }
     val dropScrimColor = lerp(MaterialTheme.colorScheme.primary, Color.Black, 0.62f)
@@ -418,6 +424,7 @@ fun ChatInput(
     val cdPickFile = stringResource(Res.string.cd_pick_file)
     val cdSend = stringResource(Res.string.cd_send)
     val cdEmoji = stringResource(Res.string.cd_emoji)
+    val cdEncryptionLock = stringResource(Res.string.cd_encryption_lock)
     val corruptedShort = stringResource(Res.string.message_corrupted_short)
     val editingTitle = stringResource(Res.string.message_editing_title)
     val blockedMessage = stringResource(Res.string.suspend_chat_banner_message)
@@ -580,6 +587,34 @@ fun ChatInput(
                                     imageVector = Icons.Rounded.SentimentSatisfied,
                                     contentDescription = cdEmoji,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .padding(vertical = ChatInputIconSlotVerticalInset)
+                                    .size(ChatInputIconSlotSize)
+                                    .clip(CircleShape)
+                                    .clickable(enabled = encryptionLockAvailable) {
+                                        onEncryptionLockToggle()
+                                    }
+                                    .graphicsLayer {
+                                        alpha = if (encryptionLockAvailable) 1f else 0.4f
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = if (encryptionLockOn) {
+                                        Icons.Rounded.Lock
+                                    } else {
+                                        Icons.Rounded.LockOpen
+                                    },
+                                    contentDescription = cdEncryptionLock,
+                                    tint = if (encryptionLockOn) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                 )
                             }
 
