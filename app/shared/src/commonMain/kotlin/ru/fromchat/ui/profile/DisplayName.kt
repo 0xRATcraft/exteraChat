@@ -21,6 +21,7 @@ fun DisplayName(
     textStyle: TextStyle,
     badgeSize: Dp = 16.dp,
     maxLines: Int = 1,
+    exteraBadges: List<ExteraBadgeType> = emptyList(),
 ) {
     Row(
         modifier = modifier,
@@ -38,6 +39,14 @@ fun DisplayName(
             Spacer(Modifier.width(4.dp))
             StatusBadge(
                 verificationStatus = verificationStatus,
+                size = badgeSize,
+            )
+        }
+
+        exteraBadges.forEach { badge ->
+            Spacer(Modifier.width(2.dp))
+            ExteraBadgeIcon(
+                type = badge,
                 size = badgeSize,
             )
         }

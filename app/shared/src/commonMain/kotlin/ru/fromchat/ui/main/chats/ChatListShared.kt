@@ -103,6 +103,7 @@ import ru.fromchat.cd_chat_preview_uploading
 import ru.fromchat.cd_chat_selected
 import ru.fromchat.ui.chat.Avatar
 import ru.fromchat.ui.profile.DisplayName
+import ru.fromchat.ui.profile.rememberExteraBadges
 import ru.fromchat.ui.profile.resolveVerificationStatus
 import ru.fromchat.ui.chat.ExpressiveUploadIndicator
 import ru.fromchat.ui.chat.TypingIndicator
@@ -243,10 +244,12 @@ internal fun ChatListHeadlineWithBadge(
     val verificationStatus = remember(userId, profileCacheRevision) {
         resolveVerificationStatus(userId)
     }
+    val exteraBadges = rememberExteraBadges(userId).asList
     DisplayName(
         displayName = title,
         verificationStatus = verificationStatus,
         textStyle = MaterialTheme.typography.bodyLarge,
+        exteraBadges = exteraBadges,
     )
 }
 

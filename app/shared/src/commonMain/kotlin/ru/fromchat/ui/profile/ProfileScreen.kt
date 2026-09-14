@@ -171,6 +171,14 @@ import ru.fromchat.profile_admin_unverify_confirm_title
 import ru.fromchat.profile_admin_verify
 import ru.fromchat.profile_admin_verify_confirm_body
 import ru.fromchat.profile_admin_verify_confirm_title
+import ru.fromchat.profile_badge_clown
+import ru.fromchat.profile_badge_clown_desc
+import ru.fromchat.profile_badge_developer
+import ru.fromchat.profile_badge_developer_desc
+import ru.fromchat.profile_badge_supporter
+import ru.fromchat.profile_badge_supporter_desc
+import ru.fromchat.profile_badge_verified
+import ru.fromchat.profile_badge_verified_desc
 import ru.fromchat.profile_headline_bio
 import ru.fromchat.profile_headline_member_since
 import ru.fromchat.profile_headline_username
@@ -529,6 +537,14 @@ fun ProfileScreen(
     val headlineBio = stringResource(Res.string.profile_headline_bio)
     val headlineVerification = stringResource(Res.string.profile_headline_verification)
     val headlineUserId = stringResource(Res.string.profile_headline_user_id)
+    val badgeDeveloper = stringResource(Res.string.profile_badge_developer)
+    val badgeDeveloperDesc = stringResource(Res.string.profile_badge_developer_desc)
+    val badgeSupporter = stringResource(Res.string.profile_badge_supporter)
+    val badgeSupporterDesc = stringResource(Res.string.profile_badge_supporter_desc)
+    val badgeClown = stringResource(Res.string.profile_badge_clown)
+    val badgeClownDesc = stringResource(Res.string.profile_badge_clown_desc)
+    val badgeVerified = stringResource(Res.string.profile_badge_verified)
+    val badgeVerifiedDesc = stringResource(Res.string.profile_badge_verified_desc)
     val profileIdCopied = stringResource(Res.string.profile_id_copied)
     val verifiedSupport = stringResource(Res.string.profile_verified_support)
     val adminActionsCategory = stringResource(Res.string.profile_admin_actions_category)
@@ -562,6 +578,7 @@ fun ProfileScreen(
     val currentProfileUserId = targetUserId ?: ownUserId ?: profile?.id
     val viewerUserId = ownUserId
     val resolvedUserId = resolvedProfile?.id ?: targetUserId
+    val exteraBadges = rememberExteraBadges(resolvedUserId)
     val isDeletedProfile = resolvedUserId != null && peerIsDeleted(
         userId = resolvedUserId,
         currentUserId = viewerUserId,
@@ -693,13 +710,18 @@ fun ProfileScreen(
     val showDetailsBio = !resolvedProfile?.bio.isNullOrBlank()
     val showDetailsVerify = !isDeletedProfile && resolvedProfile?.verified == true
     val showDetailsUserId = showProfileIdUiState
+    val showBadgeDeveloper = !isDeletedProfile && exteraBadges.developer
+    val showBadgeSupporter = !isDeletedProfile && exteraBadges.supporter
+    val showBadgeClown = !isDeletedProfile && exteraBadges.clown
+    val showBadgeVerified = !isDeletedProfile && exteraBadges.verified
     val showAdminActions = !isOwnProfile &&
         !isDeletedProfile &&
         resolvedProfile != null &&
         ApiClient.user?.id == 1
     val showDetailsSection = resolvedProfile != null && !isDeletedProfile && (
         showDetailsUsername || showDetailsMemberSince || showDetailsBio ||
-            showDetailsUserId || showDetailsVerify
+            showDetailsUserId || showDetailsVerify ||
+            showBadgeDeveloper || showBadgeSupporter || showBadgeClown || showBadgeVerified
         )
 
     ScreenSurface(modifier = modifier) {
@@ -828,12 +850,25 @@ fun ProfileScreen(
                                 showDetailsBio = showDetailsBio,
                                 showDetailsVerify = showDetailsVerify,
                                 showDetailsUserId = showDetailsUserId,
+                                showBadgeDeveloper = showBadgeDeveloper,
+                                showBadgeSupporter = showBadgeSupporter,
+                                showBadgeClown = showBadgeClown,
+                                showBadgeVerified = showBadgeVerified,
+                                exteraBadges = exteraBadges.asList,
                                 showAdminActions = showAdminActions,
                                 headlineUsername = headlineUsername,
                                 headlineMemberSince = headlineMemberSince,
                                 headlineBio = headlineBio,
                                 headlineVerification = headlineVerification,
                                 headlineUserId = headlineUserId,
+                                badgeDeveloper = badgeDeveloper,
+                                badgeDeveloperDesc = badgeDeveloperDesc,
+                                badgeSupporter = badgeSupporter,
+                                badgeSupporterDesc = badgeSupporterDesc,
+                                badgeClown = badgeClown,
+                                badgeClownDesc = badgeClownDesc,
+                                badgeVerified = badgeVerified,
+                                badgeVerifiedDesc = badgeVerifiedDesc,
                                 profileIdCopied = profileIdCopied,
                                 usernameForLinks = usernameForLinks,
                                 verifiedSupport = verifiedSupport,
@@ -1333,12 +1368,25 @@ private fun ProfileLoadedBody(
     showDetailsBio: Boolean,
     showDetailsVerify: Boolean,
     showDetailsUserId: Boolean,
+    showBadgeDeveloper: Boolean,
+    showBadgeSupporter: Boolean,
+    showBadgeClown: Boolean,
+    showBadgeVerified: Boolean,
+    exteraBadges: List<ExteraBadgeType>,
     showAdminActions: Boolean,
     headlineUsername: String,
     headlineMemberSince: String,
     headlineBio: String,
     headlineVerification: String,
     headlineUserId: String,
+    badgeDeveloper: String,
+    badgeDeveloperDesc: String,
+    badgeSupporter: String,
+    badgeSupporterDesc: String,
+    badgeClown: String,
+    badgeClownDesc: String,
+    badgeVerified: String,
+    badgeVerifiedDesc: String,
     profileIdCopied: String,
     usernameForLinks: String?,
     verifiedSupport: String,
@@ -1403,6 +1451,9 @@ private fun ProfileLoadedBody(
                 StatusBadge(
                     verificationStatus = resolvedProfile.effectiveVerificationStatus(),
                 )
+                exteraBadges.forEach { badge ->
+                    ExteraBadgeIcon(type = badge)
+                }
             }
         }
 
@@ -1455,6 +1506,10 @@ private fun ProfileLoadedBody(
                 showDetailsBio,
                 showDetailsUserId,
                 showDetailsVerify,
+                showBadgeDeveloper,
+                showBadgeSupporter,
+                showBadgeClown,
+                showBadgeVerified,
             ).count { it }
             var detailIndex = 0
 
@@ -1628,6 +1683,78 @@ private fun ProfileLoadedBody(
                                 imageVector = Icons.Filled.Verified,
                                 contentDescription = null,
                                 tint = listItemIconTint,
+                            )
+                        },
+                    )
+                }
+
+                if (showBadgeDeveloper) {
+                    val position = listItemPositionInGroup(detailIndex, detailCount)
+                    detailIndex++
+                    ListItem(
+                        headline = badgeDeveloper,
+                        supportingText = badgeDeveloperDesc,
+                        divider = true,
+                        position = position,
+                        groupItemCount = detailCount,
+                        leadingContent = {
+                            ExteraBadgeIcon(
+                                type = ExteraBadgeType.Developer,
+                                size = 24.dp,
+                            )
+                        },
+                    )
+                }
+
+                if (showBadgeSupporter) {
+                    val position = listItemPositionInGroup(detailIndex, detailCount)
+                    detailIndex++
+                    ListItem(
+                        headline = badgeSupporter,
+                        supportingText = badgeSupporterDesc,
+                        divider = true,
+                        position = position,
+                        groupItemCount = detailCount,
+                        leadingContent = {
+                            ExteraBadgeIcon(
+                                type = ExteraBadgeType.Supporter,
+                                size = 24.dp,
+                            )
+                        },
+                    )
+                }
+
+                if (showBadgeClown) {
+                    val position = listItemPositionInGroup(detailIndex, detailCount)
+                    detailIndex++
+                    ListItem(
+                        headline = badgeClown,
+                        supportingText = badgeClownDesc,
+                        divider = true,
+                        position = position,
+                        groupItemCount = detailCount,
+                        leadingContent = {
+                            ExteraBadgeIcon(
+                                type = ExteraBadgeType.Clown,
+                                size = 24.dp,
+                            )
+                        },
+                    )
+                }
+
+                if (showBadgeVerified) {
+                    val position = listItemPositionInGroup(detailIndex, detailCount)
+                    detailIndex++
+                    ListItem(
+                        headline = badgeVerified,
+                        supportingText = badgeVerifiedDesc,
+                        divider = true,
+                        position = position,
+                        groupItemCount = detailCount,
+                        leadingContent = {
+                            ExteraBadgeIcon(
+                                type = ExteraBadgeType.Verified,
+                                size = 24.dp,
                             )
                         },
                     )

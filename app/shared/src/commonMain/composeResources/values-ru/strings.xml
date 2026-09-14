@@ -225,6 +225,14 @@
     <string name="profile_headline_user_id">ID пользователя</string>
     <string name="profile_id_copied">ID скопирован</string>
     <string name="profile_verified_support">Этот аккаунт - официальное лицо FromChat.</string>
+    <string name="profile_badge_developer">Разработчик</string>
+    <string name="profile_badge_developer_desc">Разработчик клиента exteraChat или AyuChat.</string>
+    <string name="profile_badge_supporter">Активист проекта</string>
+    <string name="profile_badge_supporter_desc">Этот аккаунт принадлежит активисту проекта, спасибо за помощь!</string>
+    <string name="profile_badge_clown">Официальный клоун</string>
+    <string name="profile_badge_clown_desc">Этот аккаунт принадлежит клоуну.</string>
+    <string name="profile_badge_verified">Подтвержденный аккаунт</string>
+    <string name="profile_badge_verified_desc">Этот аккаунт подтверждён командой exteraChat и AyuChat.</string>
     <string name="profile_admin_actions_category">Действия администратора</string>
     <string name="profile_admin_verify">Подтвердить</string>
     <string name="profile_admin_unverify">Отменить подтверждение</string>
