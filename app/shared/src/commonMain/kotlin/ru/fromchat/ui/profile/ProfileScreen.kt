@@ -80,6 +80,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -174,6 +175,8 @@ import ru.fromchat.profile_headline_bio
 import ru.fromchat.profile_headline_member_since
 import ru.fromchat.profile_headline_username
 import ru.fromchat.profile_headline_verification
+import ru.fromchat.profile_headline_user_id
+import ru.fromchat.profile_id_copied
 import ru.fromchat.profile_invalid_link
 import ru.fromchat.profile_load_failed
 import ru.fromchat.profile_not_found
@@ -185,6 +188,7 @@ import ru.fromchat.ui.profile.effectiveVerificationStatus
 import ru.fromchat.ui.profile.isDeletedAccount
 import ru.fromchat.ui.profile.peerIsDeleted
 import ru.fromchat.ui.LocalNavController
+import ru.fromchat.ui.main.settings.showProfileIdUiState
 import ru.fromchat.ui.chat.Avatar
 import ru.fromchat.ui.chat.TypingIndicator
 import ru.fromchat.ui.components.FromChatSnackbarHost
@@ -524,6 +528,8 @@ fun ProfileScreen(
     val headlineMemberSince = stringResource(Res.string.profile_headline_member_since)
     val headlineBio = stringResource(Res.string.profile_headline_bio)
     val headlineVerification = stringResource(Res.string.profile_headline_verification)
+    val headlineUserId = stringResource(Res.string.profile_headline_user_id)
+    val profileIdCopied = stringResource(Res.string.profile_id_copied)
     val verifiedSupport = stringResource(Res.string.profile_verified_support)
     val adminActionsCategory = stringResource(Res.string.profile_admin_actions_category)
     val adminVerifyLabel = stringResource(Res.string.profile_admin_verify)
@@ -686,12 +692,14 @@ fun ProfileScreen(
     val showDetailsMemberSince = !resolvedProfile?.createdAt.isNullOrBlank()
     val showDetailsBio = !resolvedProfile?.bio.isNullOrBlank()
     val showDetailsVerify = !isDeletedProfile && resolvedProfile?.verified == true
+    val showDetailsUserId = showProfileIdUiState
     val showAdminActions = !isOwnProfile &&
         !isDeletedProfile &&
         resolvedProfile != null &&
         ApiClient.user?.id == 1
     val showDetailsSection = resolvedProfile != null && !isDeletedProfile && (
-        showDetailsUsername || showDetailsMemberSince || showDetailsBio || showDetailsVerify
+        showDetailsUsername || showDetailsMemberSince || showDetailsBio ||
+            showDetailsUserId || showDetailsVerify
         )
 
     ScreenSurface(modifier = modifier) {
@@ -819,11 +827,14 @@ fun ProfileScreen(
                                 showDetailsMemberSince = showDetailsMemberSince,
                                 showDetailsBio = showDetailsBio,
                                 showDetailsVerify = showDetailsVerify,
+                                showDetailsUserId = showDetailsUserId,
                                 showAdminActions = showAdminActions,
                                 headlineUsername = headlineUsername,
                                 headlineMemberSince = headlineMemberSince,
                                 headlineBio = headlineBio,
                                 headlineVerification = headlineVerification,
+                                headlineUserId = headlineUserId,
+                                profileIdCopied = profileIdCopied,
                                 usernameForLinks = usernameForLinks,
                                 verifiedSupport = verifiedSupport,
                                 adminActionsCategory = adminActionsCategory,
@@ -1321,11 +1332,14 @@ private fun ProfileLoadedBody(
     showDetailsMemberSince: Boolean,
     showDetailsBio: Boolean,
     showDetailsVerify: Boolean,
+    showDetailsUserId: Boolean,
     showAdminActions: Boolean,
     headlineUsername: String,
     headlineMemberSince: String,
     headlineBio: String,
     headlineVerification: String,
+    headlineUserId: String,
+    profileIdCopied: String,
     usernameForLinks: String?,
     verifiedSupport: String,
     adminActionsCategory: String,
@@ -1439,6 +1453,7 @@ private fun ProfileLoadedBody(
                 showDetailsUsername,
                 showDetailsMemberSince,
                 showDetailsBio,
+                showDetailsUserId,
                 showDetailsVerify,
             ).count { it }
             var detailIndex = 0
@@ -1551,6 +1566,47 @@ private fun ProfileLoadedBody(
                                 item(Icons.Rounded.Edit, labelEdit) {
                                     navController.navigate(
                                         ProfileRoutes.editRoute(EditProfileFocusField.Bio),
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+
+                if (showDetailsUserId) {
+                    val position = listItemPositionInGroup(detailIndex, detailCount)
+                    detailIndex++
+                    val userIdText = resolvedProfile.id.toString()
+                    ListItem(
+                        headline = headlineUserId,
+                        supportingText = userIdText,
+                        divider = true,
+                        position = position,
+                        groupItemCount = detailCount,
+                        onContextMenuOpen = openContextMenuHaptic,
+                        leadingContent = {
+                            Icon(
+                                imageVector = Icons.Filled.Tag,
+                                contentDescription = null,
+                                tint = listItemIconTint,
+                            )
+                        },
+                        onClick = {
+                            scope.launch {
+                                clipboard.setText(userIdText)
+                                snackbarHostState.showReplacingSnackbar(
+                                    message = profileIdCopied,
+                                    withDismissAction = true,
+                                )
+                            }
+                        },
+                        contextMenu = {
+                            item(Icons.Rounded.ContentCopy, labelCopy) {
+                                scope.launch {
+                                    clipboard.setText(userIdText)
+                                    snackbarHostState.showReplacingSnackbar(
+                                        message = profileIdCopied,
+                                        withDismissAction = true,
                                     )
                                 }
                             }

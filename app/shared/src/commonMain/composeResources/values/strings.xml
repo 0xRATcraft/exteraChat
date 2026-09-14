@@ -241,6 +241,8 @@
     <string name="profile_headline_member_since">Joined</string>
     <string name="profile_headline_bio">About</string>
     <string name="profile_headline_verification">Verified account</string>
+    <string name="profile_headline_user_id">User ID</string>
+    <string name="profile_id_copied">ID copied</string>
     <string name="profile_verified_support">This account is an official FromChat representative.</string>
 
     <!-- Admin actions (owner / user id 1) -->
@@ -388,6 +390,8 @@
     <string name="exterachat_hide_profile_d">Remove Profile from the bottom bar</string>
     <string name="exterachat_chat_title">Chat title</string>
     <string name="exterachat_chat_title_d">Title shown above the chats list, up to 8 characters</string>
+    <string name="exterachat_show_profile_id">Show User ID</string>
+    <string name="exterachat_show_profile_id_d">Show a copyable ID block in profiles after About</string>
 
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_notification_settings">Notification settings</string>

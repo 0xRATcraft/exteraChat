@@ -31,6 +31,7 @@ object Settings {
     private const val HIDE_CONTACTS_KEY = "hide_contacts_from_bottom_bar"
     private const val HIDE_PROFILE_KEY = "hide_profile_from_bottom_bar"
     private const val CHAT_TITLE_KEY = "chat_title"
+    private const val SHOW_PROFILE_ID_KEY = "show_profile_id"
 
     /** Default title shown in the chats header when the user hasn't customized it. */
     const val DEFAULT_CHAT_TITLE = "exteraChat"
@@ -213,4 +214,9 @@ object Settings {
             settings.getString(CHAT_TITLE_KEY, DEFAULT_CHAT_TITLE).ifBlank { DEFAULT_CHAT_TITLE }
         }
         set(value) = runIO { settings.putString(CHAT_TITLE_KEY, value.take(MAX_CHAT_TITLE_LENGTH)) }
+
+    /** Shows a clickable User ID block below the bio in user profiles. */
+    var showProfileId: Boolean
+        get() = runBlocking { settings.getBoolean(SHOW_PROFILE_ID_KEY, false) }
+        set(value) = runIO { settings.putBoolean(SHOW_PROFILE_ID_KEY, value) }
 }

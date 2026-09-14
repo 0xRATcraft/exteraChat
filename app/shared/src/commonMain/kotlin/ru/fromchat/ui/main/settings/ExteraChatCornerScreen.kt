@@ -9,6 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,8 @@ import ru.fromchat.exterachat_hide_profile
 import ru.fromchat.exterachat_hide_profile_d
 import ru.fromchat.exterachat_chat_title
 import ru.fromchat.exterachat_chat_title_d
+import ru.fromchat.exterachat_show_profile_id
+import ru.fromchat.exterachat_show_profile_id_d
 import ru.fromchat.settings_category_exterachat
 import ru.fromchat.ui.components.Text
 import ru.fromchat.ui.components.SettingsPasswordOutlineFieldShape
@@ -47,6 +50,7 @@ import ru.fromchat.ui.components.SettingsPasswordOutlineFieldShape
 var hideContactsUiState by mutableStateOf(runCatching { Settings.hideContacts }.getOrDefault(false))
 var hideProfileUiState by mutableStateOf(runCatching { Settings.hideProfile }.getOrDefault(false))
 var chatTitleUiState by mutableStateOf(runCatching { Settings.chatTitle }.getOrDefault(Settings.DEFAULT_CHAT_TITLE))
+var showProfileIdUiState by mutableStateOf(runCatching { Settings.showProfileId }.getOrDefault(false))
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -126,8 +130,21 @@ fun ExteraChatCornerScreen(onBack: () -> Unit) {
                         hideProfileUiState = it
                         Settings.hideProfile = it
                     },
+                    divider = true,
                     leadingContent = {
                         Icon(Icons.Filled.Person, null)
+                    }
+                )
+                SwitchListItem(
+                    headline = stringResource(Res.string.exterachat_show_profile_id),
+                    supportingText = stringResource(Res.string.exterachat_show_profile_id_d),
+                    checked = showProfileIdUiState,
+                    onCheckedChange = {
+                        showProfileIdUiState = it
+                        Settings.showProfileId = it
+                    },
+                    leadingContent = {
+                        Icon(Icons.Filled.Tag, null)
                     }
                 )
             }
