@@ -78,7 +78,9 @@ import ru.fromchat.ui.components.Text
 import ru.fromchat.ui.extraStatusBars
 import ru.fromchat.ui.main.ConversationDetailContentPadding
 import ru.fromchat.ui.profile.StatusBadge
+import ru.fromchat.ui.profile.ExteraBadgeIcon
 import ru.fromchat.ui.profile.peerIsDeleted
+import ru.fromchat.ui.profile.rememberExteraBadges
 import ru.fromchat.ui.profile.resolveVerificationStatus
 import ru.fromchat.api.local.db.store.ProfileCache
 import ru.fromchat.api.local.db.store.visibleDisplayName
@@ -218,6 +220,14 @@ fun ChatTopBarInner(
                         Spacer(modifier = Modifier.width(4.dp))
                         StatusBadge(
                             verificationStatus = status,
+                            size = 18.dp,
+                        )
+                    }
+                    val exteraBadges = rememberExteraBadges(userId).asList
+                    exteraBadges.forEach { badge ->
+                        Spacer(modifier = Modifier.width(3.dp))
+                        ExteraBadgeIcon(
+                            type = badge,
                             size = 18.dp,
                         )
                     }

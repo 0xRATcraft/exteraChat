@@ -93,6 +93,8 @@ import ru.fromchat.ui.chat.utils.imageAspectRatioForMessage
 import ru.fromchat.ui.chat.utils.imageAttachmentKey
 import ru.fromchat.ui.components.Text
 import ru.fromchat.ui.profile.StatusBadge
+import ru.fromchat.ui.profile.ExteraBadgeIcon
+import ru.fromchat.ui.profile.rememberExteraBadges
 import ru.fromchat.ui.profile.resolveVerificationStatus
 
 /** True when [Message.content] is only a filename placeholder (no real caption). */
@@ -263,6 +265,7 @@ fun MessageItem(
     val senderVerificationStatus = remember(message.user_id, message, profileCacheRevision) {
         resolveVerificationStatus(message.user_id, message)
     }
+    val senderExteraBadges = rememberExteraBadges(message.user_id).asList
     val isDeletedSender = messageSenderIsDeleted(message, currentUserId)
     val replyRef = message.reply_to
 
@@ -788,6 +791,12 @@ fun MessageItem(
                                                     verificationStatus = senderVerificationStatus,
                                                     size = 14.dp,
                                                 )
+                                                senderExteraBadges.forEach { badge ->
+                                                    ExteraBadgeIcon(
+                                                        type = badge,
+                                                        size = 14.dp,
+                                                    )
+                                                }
                                             }
                                         }
                                     } else {
@@ -809,6 +818,12 @@ fun MessageItem(
                                                     verificationStatus = senderVerificationStatus,
                                                     size = 14.dp,
                                                 )
+                                                senderExteraBadges.forEach { badge ->
+                                                    ExteraBadgeIcon(
+                                                        type = badge,
+                                                        size = 14.dp,
+                                                    )
+                                                }
                                             }
                                         }
                                     }

@@ -8,15 +8,18 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 @Composable
 fun ExteraBadgeIcon(
@@ -46,54 +49,44 @@ fun ExteraBadgeIcon(
             tint = Color(0xFF00C853),
         )
 
-        ExteraBadgeType.Clown -> ClownBadgeIcon(modifier = modifier.size(size))
+        ExteraBadgeType.Clown -> ClownEmojiBadge(
+            modifier = modifier,
+            size = size,
+        )
     }
 }
 
 @Composable
-private fun ClownBadgeIcon(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val faceColor = Color(0xFFFFFBF0)
-        val redColor = Color(0xFFE53935)
-        val darkColor = Color(0xFF3E2723)
-
-        drawCircle(
-            color = faceColor,
-            radius = size.minDimension * 0.40f,
-            center = center,
+private fun ClownEmojiBadge(
+    modifier: Modifier = Modifier,
+    size: Dp = 20.dp,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val emojiLayout = remember(textMeasurer) {
+        textMeasurer.measure(
+            text = AnnotatedString("🤡"),
+            style = TextStyle(
+                color = Color.Unspecified,
+                fontSize = 100.sp,
+            ),
         )
-
-        val hat = Path().apply {
-            moveTo(center.x - size.width * 0.30f, center.y - size.height * 0.12f)
-            lineTo(center.x + size.width * 0.30f, center.y - size.height * 0.12f)
-            lineTo(center.x, center.y - size.height * 0.52f)
-            close()
+    }
+    Canvas(modifier = modifier.size(size)) {
+        val badgePx = size.toPx()
+        val scale = minOf(
+            badgePx / emojiLayout.size.width,
+            badgePx / emojiLayout.size.height,
+        )
+        val scaledWidth = emojiLayout.size.width * scale
+        val scaledHeight = emojiLayout.size.height * scale
+        val topLeft = Offset(
+            x = (badgePx - scaledWidth) / 2f,
+            y = (badgePx - scaledHeight) / 2f,
+        )
+        withTransform({
+            scale(scaleX = scale, scaleY = scale, pivot = topLeft)
+        }) {
+            drawText(textLayoutResult = emojiLayout)
         }
-        drawPath(hat, color = redColor)
-
-        drawCircle(
-            color = darkColor,
-            radius = size.minDimension * 0.05f,
-            center = Offset(center.x - size.width * 0.13f, center.y - size.height * 0.05f),
-        )
-        drawCircle(
-            color = darkColor,
-            radius = size.minDimension * 0.05f,
-            center = Offset(center.x + size.width * 0.13f, center.y - size.height * 0.05f),
-        )
-        drawCircle(
-            color = redColor,
-            radius = size.minDimension * 0.10f,
-            center = Offset(center.x, center.y + size.height * 0.10f),
-        )
-        drawArc(
-            color = redColor,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(center.x - size.width * 0.13f, center.y + size.height * 0.14f),
-            size = Size(size.width * 0.26f, size.height * 0.15f),
-            style = Stroke(width = size.minDimension * 0.05f, cap = StrokeCap.Round),
-        )
     }
 }
