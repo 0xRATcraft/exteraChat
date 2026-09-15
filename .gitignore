@@ -35,3 +35,4 @@ premortem-report-*.html
 
 node_modules
 preview-dist
+/exteraChatKey.jks
