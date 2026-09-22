@@ -257,7 +257,11 @@ compose.desktop {
 
         nativeDistributions {
             packageName = "FromChat"
-            packageVersion = rootProject.extra["versionName"] as String
+            // jpackage (Exe/Deb/Rpm/Dmg) requires MAJOR.MINOR.BUILD; drop extra components like the fourth in "1.1.4.1".
+            packageVersion = (rootProject.extra["versionName"] as String)
+                .split(".")
+                .take(3)
+                .joinToString(".")
             description =
                 if (project.findProperty("betaDesktop") != null) "FromChat Beta" else "FromChat"
             copyright = "© FromChat"
