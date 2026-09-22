@@ -12,12 +12,12 @@ plugins {
 private fun releaseVersionName(): String =
     findProperty("versionName")?.toString()
         ?: System.getenv("FROMCHAT_VERSION_NAME")
-        ?: "1.1.4"
+        ?: "1.1.4.1"
 
 private fun releaseVersionCode(): Int =
     findProperty("versionCode")?.toString()?.toIntOrNull()
         ?: releaseVersionName().replace(Regex("[^0-9]"), "").toIntOrNull()?.takeIf { it > 0 }
-        ?: 114
+        ?: 1141
 
 extra["versionName"] = releaseVersionName()
 extra["versionCode"] = releaseVersionCode()
