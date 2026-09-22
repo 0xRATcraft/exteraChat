@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.pr0gramm3r101.utils.settings.settings
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -36,6 +37,8 @@ internal data class ExteraBadges(
 }
 
 internal object ExteraBadgeChecker {
+    private const val STORAGE_KEY_PREFIX = "extera_badge_ids_"
+
     private val http: HttpClient by lazy { createPlatformHttpClient() }
     private val mutex = Mutex()
     private val cache = mutableMapOf<ExteraBadgeType, Set<Int>>()
@@ -45,12 +48,36 @@ internal object ExteraBadgeChecker {
 
     private suspend fun idsFor(type: ExteraBadgeType): Set<Int> = mutex.withLock {
         cache[type]?.let { return@withLock it }
+
+        val stored = loadStoredIds(type)
+        if (stored == null) {
+            saveIds(type, emptySet())
+            cache[type] = emptySet()
+        } else {
+            cache[type] = stored
+        }
+
         val fetched = fetchIds(type)
         if (fetched != null) {
-            cache[type] = fetched
+            val updated = cache.getValue(type) + fetched
+            cache[type] = updated
+            saveIds(type, updated)
         }
-        fetched.orEmpty()
+        cache.getValue(type)
     }
+
+    private suspend fun loadStoredIds(type: ExteraBadgeType): Set<Int>? {
+        val key = storageKey(type)
+        if (!settings.contains(key)) return null
+        return settings.getStringSet(key)
+            .mapNotNullTo(mutableSetOf()) { it.toIntOrNull() }
+    }
+
+    private suspend fun saveIds(type: ExteraBadgeType, ids: Set<Int>) {
+        settings.putStringSet(storageKey(type), ids.mapTo(mutableSetOf()) { it.toString() })
+    }
+
+    private fun storageKey(type: ExteraBadgeType): String = STORAGE_KEY_PREFIX + type.name.lowercase()
 
     private suspend fun fetchIds(type: ExteraBadgeType): Set<Int>? = runCatching {
         http.get(urlFor(type)).bodyAsText()
